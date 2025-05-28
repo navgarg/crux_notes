@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "578932370896",
+    "project_id": "crux-notes-1656c",
+    "storage_bucket": "crux-notes-1656c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:578932370896:android:9a5dbdeb0985d15f191dd5",
+        "android_client_info": {
+          "package_name": "com.example.crux_notes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "578932370896-06d1797j0nvnin2luhlmhbsok476355k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApdlUr71_ctt3VfpYt2Bw3DjANd2v3JjY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "578932370896-06d1797j0nvnin2luhlmhbsok476355k.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "578932370896-93g42berdfj5bsesof1u08bo001krgk1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.cruxNotesApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:578932370896:android:ca6b247940d3c196191dd5",
+        "android_client_info": {
+          "package_name": "com.example.notes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "578932370896-06d1797j0nvnin2luhlmhbsok476355k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApdlUr71_ctt3VfpYt2Bw3DjANd2v3JjY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "578932370896-06d1797j0nvnin2luhlmhbsok476355k.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "578932370896-93g42berdfj5bsesof1u08bo001krgk1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.cruxNotesApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
