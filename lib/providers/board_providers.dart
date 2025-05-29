@@ -11,187 +11,254 @@ import '../models/note_item.dart';
 
 part 'board_providers.g.dart';
 
-// --- Global/Helper instances ---
-const _uuid = Uuid();
 
-// --- Providers for external services (can also be annotated with @riverpod if preferred) ---
 final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
 
-// --- BoardNotifier using @riverpod annotation ---
+final userBoardItemsCollectionProvider = Provider<CollectionReference<Map<String, dynamic>>?>((ref) {
+  final currentUser = ref.watch(firebaseAuthProvider).currentUser; // Watch auth state
+  if (currentUser == null) {
+    return null;
+  }
+  return ref.read(firestoreProvider)
+      .collection('users')
+      .doc(currentUser.uid)
+      .collection('boardItems');
+});
+
+
 // The state type is List<BoardItem>.
-@riverpod
+@Riverpod(keepAlive: true) // Keep state alive even when no longer watched
 class BoardNotifier extends _$BoardNotifier {
   // Extends the generated _$BoardNotifier
 
   @override
-  List<BoardItem> build() {
-    return _getMockItems(); // Initialize with mock data
-  }
+  Future<List<BoardItem>> build() async {
+    final itemsCollection = ref.watch(userBoardItemsCollectionProvider);
+    print("BoardNotifier: build() called. ItemsCollection: ${itemsCollection?.path}");
 
-  List<BoardItem> _getMockItems() {
-    // final user = ref.read(firebaseAuthProvider).currentUser;
-    return [
-      NoteItem(id: _uuid.v4(),
-          x: 50,
-          y: 50,
-          zIndex: 0,
-          content: 'Mock Note 1',
-          color: Colors.lightBlueAccent),
-      NoteItem(id: _uuid.v4(),
-          x: 250,
-          y: 100,
-          zIndex: 1,
-          content: 'Mock Note 2: A bit longer to test text wrapping and overflow.',
-          color: Colors.pinkAccent),
-      ImageItem(id: _uuid.v4(),
-          x: 100,
-          y: 250,
-          zIndex: 0,
-          imageUrl: 'https://picsum.photos/seed/boardimage/200/300'),
-      FolderItem(id: _uuid.v4(),
-          x: 400,
-          y: 200,
-          zIndex: 0,
-          name: 'Mock Folder'),
-    ];
-  }
+    if (itemsCollection == null) {
+      return []; // No user, no collection, no items
+    }
 
-  // --- Methods to mutate the state ---
+    try {
+      final snapshot = await itemsCollection.get();
+      // ... map snapshot ...
+      if (snapshot.docs.isEmpty) return [];
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
 
-  void addItem(BoardItem item) {
-    state = [...state, item];
-    print('Added item: ${item.id}, type: ${item.type.name}, new zIndex: ${item
-        .zIndex}');
+        final typeName = data['type'] as String? ?? 'note';
+        final type = BoardItemType.values.firstWhere(
+                (e) => e.name == typeName,
+            orElse: () => BoardItemType.note
+        );
 
-    // await _saveItemToFirestore(item);
-  }
-
-  void updateItem(BoardItem updatedItem) {
-    state = state.map((item) {
-      return item.id == updatedItem.id ? updatedItem : item;
-    }).toList();
-    print('Updated item: ${updatedItem.id}');
-
-    // await _updateItemInFirestore(updatedItem);
-  }
-
-  void setItemPosition(String itemId, double newX, double newY) {
-    state = state.map((item) {
-      if (item.id == itemId) {
-        // Create a new instance of the item with updated position
-        if (item is NoteItem) {
-          return NoteItem(
-            id: item.id,
-            x: newX,
-            y: newY,
-            width: item.width,
-            height: item.height,
-            zIndex: item.zIndex,
-            content: item.content,
-            color: item.color,
-            createdAt: item.createdAt,
-            updatedAt: Timestamp.now(),
-          );
-        } else if (item is ImageItem) {
-          return ImageItem(
-            id: item.id,
-            x: newX,
-            y: newY,
-            width: item.width,
-            height: item.height,
-            zIndex: item.zIndex,
-            imageUrl: item.imageUrl,
-            createdAt: item.createdAt,
-            updatedAt: Timestamp.now(),
-          );
-        } else if (item is FolderItem) {
-          return FolderItem(
-            id: item.id,
-            x: newX,
-            y: newY,
-            width: item.width,
-            height: item.height,
-            zIndex: item.zIndex,
-            name: item.name,
-            itemIds: item.itemIds,
-            createdAt: item.createdAt,
-            updatedAt: Timestamp.now(),
-          );
+        switch (type) {
+          case BoardItemType.note:
+            return NoteItem.fromJson(data);
+          case BoardItemType.image:
+            return ImageItem.fromJson(data);
+          case BoardItemType.folder:
+            return FolderItem.fromJson(data);
         }
+      }).toList();
+    } catch (e,s) {
+      print("BoardNotifier: Error loading items from Firestore: $e\n$s");
+      throw Exception("Failed to load board items: $e");
+    }
+  }
+
+  Future<void> addItem(BoardItem item) async {
+    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
+    if (itemsCollection == null) return;
+
+    final currentItems = state.valueOrNull ?? [];
+    state = AsyncData([...currentItems, item]);
+    print('BoardNotifier: Added item locally: ${item.id}');
+
+    try {
+      await itemsCollection.doc(item.id).set(item.toJson());
+      print("BoardNotifier: Item ${item.id} saved to Firestore.");
+    } catch (e, s) {
+      print("BoardNotifier: Error saving item ${item.id} to Firestore: $e\n$s");
+      state = AsyncData(currentItems); // Revert
+    }
+  }
+
+  Future<void> updateItem(BoardItem updatedItem) async {
+    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
+    if (itemsCollection == null) return;
+
+    final currentItems = state.valueOrNull ?? [];
+    state = AsyncData(currentItems.map((i) => i.id == updatedItem.id ? updatedItem : i).toList());
+
+    try {
+      updatedItem.updatedAt = Timestamp.now();
+      await itemsCollection.doc(updatedItem.id).update(updatedItem.toJson());
+      print("BoardNotifier: Item ${updatedItem.id} updated.");
+    } catch (e,s) {
+      print("BoardNotifier: Error updating item ${updatedItem.id}: $e\n$s");
+      state = AsyncData(currentItems); // Revert
+    }
+  }
+
+  Future<void> setItemPosition(String itemId, double newX, double newY) async {
+    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
+    if (itemsCollection == null) return;
+
+    final currentItems = state.valueOrNull ?? [];
+    BoardItem? itemToUpdate;
+    final newItemsList = currentItems.map((item) {
+      if (item.id == itemId) {
+        itemToUpdate = _createUpdatedItemWithNewPosition(item, newX, newY);
+        return itemToUpdate!;
       }
       return item;
     }).toList();
-    print('Set item $itemId position to ($newX, $newY)');
-    // todo: save updated position to Firestore after drag completes
+
+    state = AsyncData(newItemsList);
+
+    if (itemToUpdate != null) {
+      final BoardItem finalItemToUpdate = itemToUpdate!;
+      try {
+        await itemsCollection.doc(finalItemToUpdate.id).update(finalItemToUpdate.toJson());
+        print("BoardNotifier: Item ${finalItemToUpdate.id} position updated.");
+      } catch (e,s) {
+        print("BoardNotifier: Error updating item ${finalItemToUpdate.id} position: $e\n$s");
+        state = AsyncData(currentItems); // Revert
+      }
+    }
   }
 
-  void bringToFront(String itemId) {
-    if (state.isEmpty) return;
+  Future<void> bringToFront(String itemId) async {
+    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
+    if (itemsCollection == null) return;
+
+    final currentItems = state.valueOrNull ?? [];
+    if (currentItems.isEmpty) return;
 
     int currentMaxZ = 0;
-    for (final item in state) {
+    for (final item in currentItems) { //find actual maxZ
       if (item.zIndex > currentMaxZ) {
         currentMaxZ = item.zIndex;
       }
     }
     final int newZIndex = currentMaxZ + 1;
+    BoardItem? itemToUpdate; // Variable to hold the item that will be updated
 
-    state = state.map((item) {
+    // Create the new list with the updated item
+    final newItemsList = currentItems.map((item) {
       if (item.id == itemId) {
-        if (item is NoteItem) {
-          return NoteItem(
-            id: item.id,
-            x: item.x,
-            y: item.y,
-            width: item.width,
-            height: item.height,
-            zIndex: newZIndex,
-            content: item.content,
-            color: item.color,
-            // Assign new zIndex
-            createdAt: item.createdAt,
-            updatedAt: Timestamp.now(),
-          );
-        } else if (item is ImageItem) {
-          return ImageItem(
-            id: item.id,
-            x: item.x,
-            y: item.y,
-            width: item.width,
-            height: item.height,
-            zIndex: newZIndex,
-            imageUrl: item.imageUrl,
-            // Assign new zIndex
-            createdAt: item.createdAt,
-            updatedAt: Timestamp.now(),
-          );
-        } else if (item is FolderItem) {
-          return FolderItem(
-            id: item.id,
-            x: item.x,
-            y: item.y,
-            width: item.width,
-            height: item.height,
-            zIndex: newZIndex,
-            name: item.name,
-            itemIds: item.itemIds,
-            // Assign new zIndex
-            createdAt: item.createdAt,
-            updatedAt: Timestamp.now(),
-          );
-        }
+        itemToUpdate = _createUpdatedItemWithNewZIndex(item, newZIndex);
+        return itemToUpdate!;
       }
       return item;
     }).toList();
-    print('Brought item to front: $itemId with new zIndex $newZIndex');
+
+    state = AsyncData(newItemsList);
+    print('BoardNotifier: Brought item to front locally: $itemId with new zIndex $newZIndex');
+
+    if (itemToUpdate != null) {
+      final BoardItem finalItemToUpdate = itemToUpdate!;
+      try {
+        finalItemToUpdate.updatedAt = Timestamp.now();
+        await itemsCollection.doc(finalItemToUpdate.id).update(finalItemToUpdate.toJson());
+        print("BoardNotifier: Item ${finalItemToUpdate.id} zIndex updated in Firestore.");
+      } catch (e,s) {
+        print("BoardNotifier: Error updating item ${finalItemToUpdate.id} zIndex in Firestore: $e\n$s");
+        state = AsyncData(currentItems); // Revert
+      }
+    }
   }
 
+  BoardItem _createUpdatedItemWithNewPosition(BoardItem item, double newX, double newY) {
+    final now = Timestamp.now();
+    if (item is NoteItem) {
+      return NoteItem(
+          id: item.id,
+          x: newX,
+          y: newY,
+          width: item.width,
+          height: item.height,
+          zIndex: item.zIndex,
+          content: item.content,
+          color: item.color,
+          createdAt: item.createdAt,
+          updatedAt: now);
+    } else if (item is ImageItem) {
+      return ImageItem(
+          id: item.id,
+          x: newX,
+          y: newY,
+          width: item.width,
+          height: item.height,
+          zIndex: item.zIndex,
+          imageUrl: item.imageUrl,
+          createdAt: item.createdAt,
+          updatedAt: now);
+    } else if (item is FolderItem) {
+      return FolderItem(
+          id: item.id,
+          x: newX,
+          y: newY,
+          width: item.width,
+          height: item.height,
+          zIndex: item.zIndex,
+          name: item.name,
+          itemIds: item.itemIds,
+          createdAt: item.createdAt,
+          updatedAt: now);
+    }
+    throw Exception("Unknown item type in _createUpdatedItemWithNewPosition");
+  }
+
+  BoardItem _createUpdatedItemWithNewZIndex(BoardItem item, int newZIndex) {
+    final now = Timestamp.now();
+    if (item is NoteItem) {
+      return NoteItem(
+          id: item.id,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          zIndex: newZIndex,
+          content: item.content,
+          color: item.color,
+          createdAt: item.createdAt,
+          updatedAt: now);
+    } else if (item is ImageItem) {
+      return ImageItem(
+          id: item.id,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          zIndex: newZIndex,
+          imageUrl: item.imageUrl,
+          createdAt: item.createdAt,
+          updatedAt: now);
+    } else if (item is FolderItem) {
+      return FolderItem(
+          id: item.id,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          zIndex: newZIndex,
+          name: item.name,
+          itemIds: item.itemIds,
+          createdAt: item.createdAt,
+          updatedAt: now);
+    }
+    throw Exception("Unknown item type in _createUpdatedItemWithNewZIndex");
+  }
 
   int getNextZIndex() {
-    if (state.isEmpty) return 0;
-    int maxZ = state.first.zIndex;
-    for (var item in state) {
+    final currentItems = state.valueOrNull ?? [];
+    if (currentItems.isEmpty) return 0;
+    int maxZ = currentItems.first.zIndex;
+    for (var item in currentItems.skip(1)) {
       if (item.zIndex > maxZ) {
         maxZ = item.zIndex;
       }

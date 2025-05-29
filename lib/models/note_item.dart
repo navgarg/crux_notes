@@ -30,7 +30,7 @@ class NoteItem extends BoardItem {
       'height': height,
       'type': type.name, // Store enum as string
       'content': content,
-      'color': color, // Store color as int
+      'color': color.toARGB32(), // Store color as int
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'zIndex': zIndex,
