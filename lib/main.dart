@@ -35,6 +35,7 @@ class MyApp extends ConsumerWidget {
       ),
       themeMode: ThemeMode.system, // Or allow user to choose
       home: const AuthGate(), // Entry point will check auth state
+      // home: BoardScreen(),
     );
   }
 }
