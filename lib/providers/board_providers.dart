@@ -76,15 +76,15 @@ class BoardNotifier extends _$BoardNotifier {
     // await _updateItemInFirestore(updatedItem);
   }
 
-  void updateItemPosition(String itemId, double dx, double dy) {
+  void setItemPosition(String itemId, double newX, double newY) {
     state = state.map((item) {
       if (item.id == itemId) {
         // Create a new instance of the item with updated position
         if (item is NoteItem) {
           return NoteItem(
             id: item.id,
-            x: item.x + dx,
-            y: item.y + dy,
+            x: newX,
+            y: newY,
             width: item.width,
             height: item.height,
             zIndex: item.zIndex,
@@ -96,8 +96,8 @@ class BoardNotifier extends _$BoardNotifier {
         } else if (item is ImageItem) {
           return ImageItem(
             id: item.id,
-            x: item.x + dx,
-            y: item.y + dy,
+            x: newX,
+            y: newY,
             width: item.width,
             height: item.height,
             zIndex: item.zIndex,
@@ -105,12 +105,11 @@ class BoardNotifier extends _$BoardNotifier {
             createdAt: item.createdAt,
             updatedAt: Timestamp.now(),
           );
-        }
-        else if (item is FolderItem) {
+        } else if (item is FolderItem) {
           return FolderItem(
             id: item.id,
-            x: item.x + dx,
-            y: item.y + dy,
+            x: newX,
+            y: newY,
             width: item.width,
             height: item.height,
             zIndex: item.zIndex,
@@ -123,6 +122,8 @@ class BoardNotifier extends _$BoardNotifier {
       }
       return item;
     }).toList();
+    print('Set item $itemId position to ($newX, $newY)');
+    // todo: save updated position to Firestore after drag completes
   }
 
   void bringToFront(String itemId) {
