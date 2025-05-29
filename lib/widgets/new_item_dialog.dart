@@ -30,7 +30,7 @@ Future<void> showNewItemDialog(BuildContext context, WidgetRef ref) async {
                     y: 50,
                     zIndex: boardNotifier.getNextZIndex(),
                     content: 'New Note',
-                    color: Colors.blueAccent, // Default color
+                    color: Colors.amber, // Default color
                   );
 
                   await boardNotifier.addItem(newNote);

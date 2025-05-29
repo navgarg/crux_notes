@@ -13,6 +13,7 @@ import '../providers/board_providers.dart' hide firebaseAuthProvider;
 import '../widgets/folder_widget.dart';
 import '../widgets/image_widget.dart';
 import '../widgets/note_widget.dart';
+import 'note_editor_screen.dart';
 
 class BoardScreen extends ConsumerWidget {
   const BoardScreen({super.key});
@@ -111,7 +112,12 @@ class BoardScreen extends ConsumerWidget {
                           note: item,
                           onTap: () {
                             print('Tapped note: ${item.id}');
-                            // todo: Implement note expansion
+                            Navigator.of(context).push(
+                              MaterialPageRoute( // Basic navigation
+                                builder: (context) => NoteEditorScreen(noteToEdit: item),
+                              ),
+                            );
+                            // todo: replace with a custom PageRoute for animation
                           },
                         );
                       } else if (item is ImageItem) {
