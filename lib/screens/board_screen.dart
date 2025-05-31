@@ -25,6 +25,7 @@ class BoardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final User? currentUser = ref.watch(currentUserProvider);
     final AsyncValue<List<BoardItem>> asyncBoardItems = ref.watch(boardNotifierProvider);
+    print("Building BoardScreen for user: ${currentUser?.email ?? 'Guest'}");
 
     return Scaffold(
       appBar: AppBar(
@@ -88,10 +89,10 @@ class BoardScreen extends ConsumerWidget {
               );
 
               final boardNotifier = ref.read(boardNotifierProvider.notifier);
-              boardNotifier.setItemPosition(
+              boardNotifier.updateItemGeometricProperties(
                 droppedItem.id,
-                localOffset.dx,
-                localOffset.dy,
+                newX: localOffset.dx,
+                newY: localOffset.dy,
               );
               // Bring the dropped item to the front visually
               boardNotifier.bringToFront(droppedItem.id);
@@ -124,9 +125,6 @@ class BoardScreen extends ConsumerWidget {
                         itemWidget = ImageWidget(
                           key: itemKey,
                           imageItem: item,
-                          onTap: () {
-                            print('Tapped image: ${item.id}');
-                          },
                         );
                       } else if (item is FolderItem) {
                         itemWidget = FolderWidget(

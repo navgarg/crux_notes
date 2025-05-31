@@ -19,10 +19,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       // Trigger the authentication flow
+      print("Attempting to get GoogleSignInAccount...");
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      print("GoogleSignInAccount: ${googleUser?.displayName}");
 
       // Obtain the auth details from the request
+      print("Attempting to get GoogleSignInAuthentication...");
       final GoogleSignInAuthentication? googleAuth = await googleUser?.authentication;
+      print("GoogleAuth idToken present: ${googleAuth?.idToken != null}");
 
       // Create a new credential
       if (googleAuth != null) {
@@ -31,7 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
           idToken: googleAuth.idToken,
         );
         // Once signed in, return the UserCredential
-        await FirebaseAuth.instance.signInWithCredential(credential);
+        print("Attempting FirebaseAuth.instance.signInWithCredential...");
+        UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+        print("Firebase signInWithCredential SUCCESS: User: ${userCredential.user?.uid}");
       }
     } catch (e) {
       // Handle error, e.g., show a SnackBar

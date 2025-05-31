@@ -12,11 +12,14 @@ class AuthGate extends ConsumerWidget{
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateChangesProvider);
+    print("Building AuthGate, current auth state: $authState");
     return authState.when(
       data: (user) {
         if (user != null) {
+          print("User is authenticated: ${user.email}");
           return const BoardScreen();
         }
+        print("User is not authenticated, showing login screen");
         return const LoginScreen();
       },
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),

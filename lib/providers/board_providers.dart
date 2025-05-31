@@ -35,35 +35,29 @@ class BoardNotifier extends _$BoardNotifier {
   @override
   Future<List<BoardItem>> build() async {
     final itemsCollection = ref.watch(userBoardItemsCollectionProvider);
-    print("BoardNotifier: build() called. ItemsCollection: ${itemsCollection?.path}");
-
-    if (itemsCollection == null) {
-      return []; // No user, no collection, no items
-    }
+    print("BoardNotifier: build() called. ItemsCollection path: ${itemsCollection?.path}");
+    if (itemsCollection == null) return [];
 
     try {
-      final snapshot = await itemsCollection.get();
-      // ... map snapshot ...
-      if (snapshot.docs.isEmpty) return [];
+      final snapshot = await itemsCollection.orderBy('zIndex').get(); // Good to order
+      if (snapshot.docs.isEmpty) {
+        print("BoardNotifier: No items found in Firestore. Returning empty list.");
+        return [];
+      }
+      print("BoardNotifier: Loaded ${snapshot.docs.length} items from Firestore.");
       return snapshot.docs.map((doc) {
         final data = doc.data();
-
-        final typeName = data['type'] as String? ?? 'note';
-        final type = BoardItemType.values.firstWhere(
-                (e) => e.name == typeName,
-            orElse: () => BoardItemType.note
-        );
-
+        // The ID is part of the item's data if saved correctly by item.toJson()
+        // If not, you'd do: data['id'] = doc.id;
+        final typeName = data['type'] as String? ?? BoardItemType.note.name;
+        final type = BoardItemType.values.firstWhere((e) => e.name == typeName, orElse: () => BoardItemType.note);
         switch (type) {
-          case BoardItemType.note:
-            return NoteItem.fromJson(data);
-          case BoardItemType.image:
-            return ImageItem.fromJson(data);
-          case BoardItemType.folder:
-            return FolderItem.fromJson(data);
+          case BoardItemType.note:   return NoteItem.fromJson(data);
+          case BoardItemType.image:  return ImageItem.fromJson(data);
+          case BoardItemType.folder: return FolderItem.fromJson(data);
         }
       }).toList();
-    } catch (e,s) {
+    } catch (e, s) {
       print("BoardNotifier: Error loading items from Firestore: $e\n$s");
       throw Exception("Failed to load board items: $e");
     }
@@ -74,191 +68,118 @@ class BoardNotifier extends _$BoardNotifier {
     if (itemsCollection == null) return;
 
     final currentItems = state.valueOrNull ?? [];
-    state = AsyncData([...currentItems, item]);
-    print('BoardNotifier: Added item locally: ${item.id}');
+    state = AsyncData([...currentItems, item]); // Optimistic add
 
     try {
       await itemsCollection.doc(item.id).set(item.toJson());
-      print("BoardNotifier: Item ${item.id} saved to Firestore.");
+      print("BoardNotifier: Item ${item.id} saved.");
     } catch (e, s) {
-      print("BoardNotifier: Error saving item ${item.id} to Firestore: $e\n$s");
-      state = AsyncData(currentItems); // Revert
+      print("BoardNotifier: Error saving item ${item.id}: $e\n$s");
+      state = AsyncData(currentItems); // Revert optimistic add
     }
   }
 
+  /// General method to update any properties of an item.
   Future<void> updateItem(BoardItem updatedItem) async {
     final itemsCollection = ref.read(userBoardItemsCollectionProvider);
     if (itemsCollection == null) return;
 
     final currentItems = state.valueOrNull ?? [];
-    state = AsyncData(currentItems.map((i) => i.id == updatedItem.id ? updatedItem : i).toList());
+    updatedItem.updatedAt = Timestamp.now();
+
+    state = AsyncData(currentItems.map((item) {
+      return item.id == updatedItem.id ? updatedItem : item;
+    }).toList());
+    print('BoardNotifier: Optimistically updated item: ${updatedItem.id}');
 
     try {
-      updatedItem.updatedAt = Timestamp.now();
       await itemsCollection.doc(updatedItem.id).update(updatedItem.toJson());
-      print("BoardNotifier: Item ${updatedItem.id} updated.");
-    } catch (e,s) {
-      print("BoardNotifier: Error updating item ${updatedItem.id}: $e\n$s");
-      state = AsyncData(currentItems); // Revert
+      print("BoardNotifier: Item ${updatedItem.id} updated in Firestore.");
+    } catch (e, s) {
+      print("BoardNotifier: Error updating item ${updatedItem.id} in Firestore: $e\n$s");
+      state = AsyncData(currentItems);
     }
   }
 
-  Future<void> setItemPosition(String itemId, double newX, double newY) async {
-    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
-    if (itemsCollection == null) return;
 
+  /// Updates geometric properties (position, size, zIndex) of an item.
+  Future<void> updateItemGeometricProperties(
+      String itemId, {
+        double? newX,
+        double? newY,
+        double? newWidth,
+        double? newHeight,
+        int? newZIndex,
+      }) async {
     final currentItems = state.valueOrNull ?? [];
-    BoardItem? itemToUpdate;
-    final newItemsList = currentItems.map((item) {
-      if (item.id == itemId) {
-        itemToUpdate = _createUpdatedItemWithNewPosition(item, newX, newY);
-        return itemToUpdate!;
-      }
-      return item;
-    }).toList();
-
-    state = AsyncData(newItemsList);
-
-    if (itemToUpdate != null) {
-      final BoardItem finalItemToUpdate = itemToUpdate!;
-      try {
-        await itemsCollection.doc(finalItemToUpdate.id).update(finalItemToUpdate.toJson());
-        print("BoardNotifier: Item ${finalItemToUpdate.id} position updated.");
-      } catch (e,s) {
-        print("BoardNotifier: Error updating item ${finalItemToUpdate.id} position: $e\n$s");
-        state = AsyncData(currentItems); // Revert
-      }
+    final itemIndex = currentItems.indexWhere((i) => i.id == itemId);
+    if (itemIndex == -1) {
+      print("BoardNotifier: Item $itemId not found for geometric update.");
+      return;
     }
+
+    final originalItem = currentItems[itemIndex];
+    BoardItem updatedItemInstance;
+    final now = Timestamp.now();
+    if (originalItem is NoteItem) {
+      updatedItemInstance = NoteItem(
+        id: originalItem.id,
+        x: newX ?? originalItem.x, y: newY ?? originalItem.y,
+        width: newWidth ?? originalItem.width, height: newHeight ?? originalItem.height,
+        zIndex: newZIndex ?? originalItem.zIndex,
+        content: originalItem.content, color: originalItem.color,
+        createdAt: originalItem.createdAt, updatedAt: now,
+      );
+    }
+    else if (originalItem is ImageItem) {
+      updatedItemInstance = ImageItem(
+        id: originalItem.id,
+        x: newX ?? originalItem.x, y: newY ?? originalItem.y,
+        width: newWidth ?? originalItem.width, height: newHeight ?? originalItem.height,
+        zIndex: newZIndex ?? originalItem.zIndex,
+        imageUrl: originalItem.imageUrl,
+        createdAt: originalItem.createdAt, updatedAt: now,
+      );
+    }
+    else if (originalItem is FolderItem) {
+      updatedItemInstance = FolderItem(
+        id: originalItem.id,
+        x: newX ?? originalItem.x, y: newY ?? originalItem.y,
+        width: newWidth ?? originalItem.width, height: newHeight ?? originalItem.height,
+        zIndex: newZIndex ?? originalItem.zIndex,
+        name: originalItem.name, itemIds: originalItem.itemIds,
+        createdAt: originalItem.createdAt, updatedAt: now,
+      );
+    }
+    else {
+      print("BoardNotifier: Unknown item type for geometric update: ${originalItem.runtimeType}");
+      return; // Or throw an error
+    }
+
+    await updateItem(updatedItemInstance);
   }
 
   Future<void> bringToFront(String itemId) async {
-    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
-    if (itemsCollection == null) return;
-
     final currentItems = state.valueOrNull ?? [];
     if (currentItems.isEmpty) return;
 
     int currentMaxZ = 0;
-    for (final item in currentItems) { //find actual maxZ
+    for (final item in currentItems) {
       if (item.zIndex > currentMaxZ) {
         currentMaxZ = item.zIndex;
       }
     }
-    final int newZIndex = currentMaxZ + 1;
-    BoardItem? itemToUpdate; // Variable to hold the item that will be updated
+    final int newZIndexForFront = currentMaxZ + 1;
 
-    // Create the new list with the updated item
-    final newItemsList = currentItems.map((item) {
-      if (item.id == itemId) {
-        itemToUpdate = _createUpdatedItemWithNewZIndex(item, newZIndex);
-        return itemToUpdate!;
-      }
-      return item;
-    }).toList();
-
-    state = AsyncData(newItemsList);
-    print('BoardNotifier: Brought item to front locally: $itemId with new zIndex $newZIndex');
-
-    if (itemToUpdate != null) {
-      final BoardItem finalItemToUpdate = itemToUpdate!;
-      try {
-        finalItemToUpdate.updatedAt = Timestamp.now();
-        await itemsCollection.doc(finalItemToUpdate.id).update(finalItemToUpdate.toJson());
-        print("BoardNotifier: Item ${finalItemToUpdate.id} zIndex updated in Firestore.");
-      } catch (e,s) {
-        print("BoardNotifier: Error updating item ${finalItemToUpdate.id} zIndex in Firestore: $e\n$s");
-        state = AsyncData(currentItems); // Revert
-      }
-    }
-  }
-
-  BoardItem _createUpdatedItemWithNewPosition(BoardItem item, double newX, double newY) {
-    final now = Timestamp.now();
-    if (item is NoteItem) {
-      return NoteItem(
-          id: item.id,
-          x: newX,
-          y: newY,
-          width: item.width,
-          height: item.height,
-          zIndex: item.zIndex,
-          content: item.content,
-          color: item.color,
-          createdAt: item.createdAt,
-          updatedAt: now);
-    } else if (item is ImageItem) {
-      return ImageItem(
-          id: item.id,
-          x: newX,
-          y: newY,
-          width: item.width,
-          height: item.height,
-          zIndex: item.zIndex,
-          imageUrl: item.imageUrl,
-          createdAt: item.createdAt,
-          updatedAt: now);
-    } else if (item is FolderItem) {
-      return FolderItem(
-          id: item.id,
-          x: newX,
-          y: newY,
-          width: item.width,
-          height: item.height,
-          zIndex: item.zIndex,
-          name: item.name,
-          itemIds: item.itemIds,
-          createdAt: item.createdAt,
-          updatedAt: now);
-    }
-    throw Exception("Unknown item type in _createUpdatedItemWithNewPosition");
-  }
-
-  BoardItem _createUpdatedItemWithNewZIndex(BoardItem item, int newZIndex) {
-    final now = Timestamp.now();
-    if (item is NoteItem) {
-      return NoteItem(
-          id: item.id,
-          x: item.x,
-          y: item.y,
-          width: item.width,
-          height: item.height,
-          zIndex: newZIndex,
-          content: item.content,
-          color: item.color,
-          createdAt: item.createdAt,
-          updatedAt: now);
-    } else if (item is ImageItem) {
-      return ImageItem(
-          id: item.id,
-          x: item.x,
-          y: item.y,
-          width: item.width,
-          height: item.height,
-          zIndex: newZIndex,
-          imageUrl: item.imageUrl,
-          createdAt: item.createdAt,
-          updatedAt: now);
-    } else if (item is FolderItem) {
-      return FolderItem(
-          id: item.id,
-          x: item.x,
-          y: item.y,
-          width: item.width,
-          height: item.height,
-          zIndex: newZIndex,
-          name: item.name,
-          itemIds: item.itemIds,
-          createdAt: item.createdAt,
-          updatedAt: now);
-    }
-    throw Exception("Unknown item type in _createUpdatedItemWithNewZIndex");
+    await updateItemGeometricProperties(itemId, newZIndex: newZIndexForFront);
+    print('BoardNotifier: Brought item to front: $itemId with new zIndex $newZIndexForFront');
   }
 
   int getNextZIndex() {
     final currentItems = state.valueOrNull ?? [];
     if (currentItems.isEmpty) return 0;
-    int maxZ = currentItems.first.zIndex;
-    for (var item in currentItems.skip(1)) {
+    int maxZ = 0; // Initialize to 0, as zIndex can't be less than 0
+    for (var item in currentItems) {
       if (item.zIndex > maxZ) {
         maxZ = item.zIndex;
       }
