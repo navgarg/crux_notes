@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,9 +8,11 @@ import '../providers/board_providers.dart';
 enum ResizeCorner { topLeft, topRight, bottomLeft, bottomRight }
 
 const double _visualHandleSize = 40.0;
-const double _interactiveHandleAreaSize = 120.0;
+const double _interactiveHandleAreaSize = 80.0;
 const double _minImageSize = 60.0; // Minimum width/height for an image
 
+//todo: change shape of cursor to 4 pointer to show image is movable.
+//todo: cursor should be a pointer only in the region where image is resizable.
 class ResizeHandleWidget extends ConsumerStatefulWidget {
   final ImageItem imageItem;
   final ResizeCorner corner;
@@ -47,26 +50,10 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
     final double positionOffset = -_interactiveHandleAreaSize / 2;
 
     return Positioned(
-      left:
-          (widget.corner == ResizeCorner.topLeft ||
-              widget.corner == ResizeCorner.bottomLeft)
-          ? positionOffset
-          : null,
-      top:
-          (widget.corner == ResizeCorner.topLeft ||
-              widget.corner == ResizeCorner.topRight)
-          ? positionOffset
-          : null,
-      right:
-          (widget.corner == ResizeCorner.topRight ||
-              widget.corner == ResizeCorner.bottomRight)
-          ? positionOffset
-          : null,
-      bottom:
-          (widget.corner == ResizeCorner.bottomLeft ||
-              widget.corner == ResizeCorner.bottomRight)
-          ? positionOffset
-          : null,
+        left: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.bottomLeft) ? positionOffset : null,
+        top: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.topRight) ? positionOffset : null,
+        right: (widget.corner == ResizeCorner.topRight || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
+        bottom: (widget.corner == ResizeCorner.bottomLeft || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
       child: MouseRegion(
         onEnter: (_) {
           // print("Enter ${widget.corner}");
@@ -76,112 +63,113 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
           // print("Exit ${widget.corner}");
           if (_isHandleHovering) setState(() => _isHandleHovering = false);
         },
-        child: Container(
-          width: _interactiveHandleAreaSize,
-          height: _interactiveHandleAreaSize,
-          color: Colors.transparent,
-          alignment: Alignment.center,
-          child: AnimatedOpacity(
-            opacity: _isHandleHovering ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 100),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanStart: (details) {
-                ref
-                    .read(boardNotifierProvider.notifier)
-                    .bringToFront(widget.imageItem.id);
-              },
-              onPanUpdate: (details) {
-                double currentX = widget.imageItem.x;
-                double currentY = widget.imageItem.y;
-                double currentWidth = widget.imageItem.width;
-                double currentHeight = widget.imageItem.height;
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.down,
+          onPanStart: (details) {
+            ref
+                .read(boardNotifierProvider.notifier)
+                .bringToFront(widget.imageItem.id);
+          },
+          onPanUpdate: (details) {
+            double currentX = widget.imageItem.x;
+            double currentY = widget.imageItem.y;
+            double currentWidth = widget.imageItem.width;
+            double currentHeight = widget.imageItem.height;
+            double newX = currentX,
+                newY = currentY,
+                newWidth = currentWidth,
+                newHeight = currentHeight;
 
-                double newX = currentX;
-                double newY = currentY;
-                double newWidth = currentWidth;
-                double newHeight = currentHeight;
-
-                switch (widget.corner) {
-                  case ResizeCorner.topLeft:
-                    newWidth = (currentWidth - details.delta.dx).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    newHeight = (currentHeight - details.delta.dy).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    // Only update position if size actually changed, to prevent jitter if at min size
-                    if (newWidth != currentWidth)
-                      newX = currentX + (currentWidth - newWidth);
-                    if (newHeight != currentHeight)
-                      newY = currentY + (currentHeight - newHeight);
-                    break;
-                  case ResizeCorner.topRight:
-                    newWidth = (currentWidth + details.delta.dx).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    newHeight = (currentHeight - details.delta.dy).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    if (newHeight != currentHeight)
-                      newY = currentY + (currentHeight - newHeight);
-                    break;
-                  case ResizeCorner.bottomLeft:
-                    newWidth = (currentWidth - details.delta.dx).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    newHeight = (currentHeight + details.delta.dy).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    if (newWidth != currentWidth)
-                      newX = currentX + (currentWidth - newWidth);
-                    break;
-                  case ResizeCorner.bottomRight:
-                    newWidth = (currentWidth + details.delta.dx).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    newHeight = (currentHeight + details.delta.dy).clamp(
-                      _minImageSize,
-                      double.infinity,
-                    );
-                    break;
-                }
-
-                final boardNotifier = ref.read(boardNotifierProvider.notifier);
-                boardNotifier.updateItemGeometricProperties(
-                  widget.imageItem.id,
-                  newX: (newX != currentX) ? newX : null,
-                  newY: (newY != currentY) ? newY : null,
-                  newWidth: (newWidth != currentWidth) ? newWidth : null,
-                  newHeight: (newHeight != currentHeight) ? newHeight : null,
+            switch (widget.corner) {
+              case ResizeCorner.topLeft:
+                newWidth = (currentWidth - details.delta.dx).clamp(
+                  _minImageSize,
+                  double.infinity,
                 );
-              },
-              onPanEnd: (details) {
-                print(
-                  'Image resize pan ended for ${widget.imageItem.id} from ${widget.corner}',
+                newHeight = (currentHeight - details.delta.dy).clamp(
+                  _minImageSize,
+                  double.infinity,
                 );
-              },
-              child: Container(
-                  width: _visualHandleSize, // Visible size
-                height: _visualHandleSize,
+                if (newWidth != currentWidth)
+                  newX = currentX + (currentWidth - newWidth);
+                if (newHeight != currentHeight)
+                  newY = currentY + (currentHeight - newHeight);
+                break;
+              case ResizeCorner.topRight:
+                newWidth = (currentWidth + details.delta.dx).clamp(
+                  _minImageSize,
+                  double.infinity,
+                );
+                newHeight = (currentHeight - details.delta.dy).clamp(
+                  _minImageSize,
+                  double.infinity,
+                );
+                if (newHeight != currentHeight)
+                  newY = currentY + (currentHeight - newHeight);
+                break;
+              case ResizeCorner.bottomLeft:
+                newWidth = (currentWidth - details.delta.dx).clamp(
+                  _minImageSize,
+                  double.infinity,
+                );
+                newHeight = (currentHeight + details.delta.dy).clamp(
+                  _minImageSize,
+                  double.infinity,
+                );
+                if (newWidth != currentWidth)
+                  newX = currentX + (currentWidth - newWidth);
+                break;
+              case ResizeCorner.bottomRight:
+                newWidth = (currentWidth + details.delta.dx).clamp(
+                  _minImageSize,
+                  double.infinity,
+                );
+                newHeight = (currentHeight + details.delta.dy).clamp(
+                  _minImageSize,
+                  double.infinity,
+                );
+                break;
+            }
+
+            final boardNotifier = ref.read(boardNotifierProvider.notifier);
+            boardNotifier.updateItemGeometricProperties(
+              widget.imageItem.id,
+              newX: (newX != currentX) ? newX : null,
+              newY: (newY != currentY) ? newY : null,
+              newWidth: (newWidth != currentWidth) ? newWidth : null,
+              newHeight: (newHeight != currentHeight) ? newHeight : null,
+            );
+          },
+          onPanEnd: (details) {
+            print(
+              'Image resize pan ended for ${widget.imageItem.id} from ${widget.corner}',
+            );
+          },
+            child: Container(
+              width: _interactiveHandleAreaSize,
+              height: _interactiveHandleAreaSize,
+              color: Colors.transparent,
+              alignment: Alignment.center,
+              child: AnimatedOpacity(
+                opacity: _isHandleHovering ? 1.0 : 0,
+                duration: const Duration(milliseconds: 100),
+                // child: Container(
+                //   width:
+                //       _interactiveHandleAreaSize,
+                //   height: _interactiveHandleAreaSize,
                   // decoration: BoxDecoration(
                   //   color: Theme.of(
                   //     context,
-                  //   ).colorScheme.primary.withAlpha((255 * 0.2).round()),
+                  //   ).colorScheme.primaryContainer.withAlpha(200),
                   //   shape: BoxShape.circle,
                   //   border: Border.all(
-                  //     color: Colors.white.withAlpha(200),
+                  //     color: Theme.of(
+                  //       context,
+                  //     ).colorScheme.onPrimaryContainer.withAlpha(150),
                   //     width: 1,
                   //   ),
                   // ),
-                  alignment: Alignment.center,
                   child: Icon(
                     iconData,
                     size: _visualHandleSize * 0.6,
@@ -194,8 +182,9 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
                       ),
                     ],
                   ),
-              ),
-            ),
+                ),
+              // ),
+            // ),
           ),
         ),
       ),

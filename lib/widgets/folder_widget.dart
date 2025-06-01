@@ -1,16 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/board_item.dart';
 import '../models/folder_item.dart';
+import '../providers/board_providers.dart';
 
-class FolderWidget extends StatelessWidget {
+class FolderWidget extends ConsumerWidget {
   final FolderItem folder;
-  final VoidCallback? onTap;
+  final VoidCallback? onPrimaryAction;
 
-  const FolderWidget({super.key, required this.folder, this.onTap});
+  const FolderWidget({super.key, required this.folder, this.onPrimaryAction});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // final selectedIds = ref.watch(
+    //   boardNotifierProvider.select((asyncValue) {
+    //     return ref.read(boardNotifierProvider.notifier).selectedItemIds;
+    //   }),
+    // );
+
+    final boardState = ref.watch(boardNotifierProvider);
+    final Set<String> currentSelectedIds = boardState.hasValue
+        ? ref.read(boardNotifierProvider.notifier).selectedItemIds
+        : const {};
+    final isSelected = currentSelectedIds.contains(folder.id);
+
     final folderContent = Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -18,8 +32,13 @@ class FolderWidget extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           folder.name,
-          textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: Colors.brown.shade900, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.brown.shade900,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ],
     );
@@ -31,7 +50,10 @@ class FolderWidget extends StatelessWidget {
         width: folder.width,
         height: folder.height,
         padding: const EdgeInsets.all(8.0),
-        decoration: BoxDecoration(color: Colors.brown.shade300.withAlpha((255 * 0.8).round()), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(
+          color: Colors.brown.shade300.withAlpha((255 * 0.8).round()),
+          borderRadius: BorderRadius.circular(8),
+        ),
         child: folderContent,
       ),
     );
@@ -41,9 +63,12 @@ class FolderWidget extends StatelessWidget {
       height: folder.height,
       padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
-          color: Colors.brown.shade300.withAlpha((255 * 0.3).round()),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey.shade400, style: BorderStyle.solid)
+        color: Colors.brown.shade300.withAlpha((255 * 0.3).round()),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Colors.grey.shade400,
+          style: BorderStyle.solid,
+        ),
       ),
     );
 
@@ -52,7 +77,22 @@ class FolderWidget extends StatelessWidget {
       feedback: feedbackWidget,
       childWhenDragging: childWhenDraggingWidget,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: () {
+          final notifier = ref.read(boardNotifierProvider.notifier);
+          notifier.bringToFront(folder.id);
+          if (notifier.selectedItemIds.isNotEmpty) {
+            notifier.toggleItemSelection(folder.id);
+          } else if (onPrimaryAction != null) {
+            onPrimaryAction!();
+          } else {
+            notifier.toggleItemSelection(folder.id);
+          }
+        },
+        onLongPress: () {
+          final notifier = ref.read(boardNotifierProvider.notifier);
+          notifier.bringToFront(folder.id);
+          notifier.toggleItemSelection(folder.id);
+        },
         child: Container(
           width: folder.width,
           height: folder.height,
@@ -60,8 +100,15 @@ class FolderWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.brown.shade300,
             borderRadius: BorderRadius.circular(8),
+            border: isSelected // Conditional border
+                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 3)
+                : Border.all(color: Colors.transparent, width: 3),
             boxShadow: [
-              BoxShadow(color: Colors.black.withAlpha((255 * 0.2).round()), blurRadius: 4, offset: const Offset(2, 2)),
+              BoxShadow(
+                color: Colors.black.withAlpha(isSelected ? 70 : 50),
+                blurRadius: isSelected ? 6 : 4,
+                offset: const Offset(2, 2),
+              ),
             ],
           ),
           child: folderContent,

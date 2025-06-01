@@ -15,31 +15,88 @@ import '../widgets/image_widget.dart';
 import '../widgets/note_widget.dart';
 import 'note_editor_screen.dart';
 
-class BoardScreen extends ConsumerWidget {
+class BoardScreen extends ConsumerStatefulWidget {
+  // Changed to ConsumerStatefulWidget
   const BoardScreen({super.key});
 
-  // Helper method to show the dialog for creating new board items
-
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BoardScreen> createState() => _BoardScreenState();
+}
+
+class _BoardScreenState extends ConsumerState<BoardScreen> {
+  bool _isDraggingOverFabForFolderCreation = false;
+
+  //todo: make a prettier app bar. check spacing for logout button; add button to switch theme (or make profile)
+  @override
+  Widget build(BuildContext context) {
     final User? currentUser = ref.watch(currentUserProvider);
-    final AsyncValue<List<BoardItem>> asyncBoardItems = ref.watch(boardNotifierProvider);
+    final AsyncValue<List<BoardItem>> asyncBoardItems = ref.watch(
+      boardNotifierProvider,
+    );
     print("Building BoardScreen for user: ${currentUser?.email ?? 'Guest'}");
+
+    final boardNotifier = ref.read(boardNotifierProvider.notifier);
+    final Set<String> selectedItemIds = ref.watch(
+      boardNotifierProvider.select(
+        (state) => state.valueOrNull != null
+            ? ref.read(boardNotifierProvider.notifier).selectedItemIds
+            : const <String>{},
+      ),
+    );
+    final bool isAnythingSelected = selectedItemIds.isNotEmpty;
+
+    Color fabBackgroundColor;
+    Color fabForegroundColor; // For icon and text
+    Widget fabIconWidget;
+    String fabLabel;
+    VoidCallback? fabAction = () =>
+        showNewItemDialog(context, ref); // Default action
+
+    final ColorScheme currentColorScheme = Theme.of(context).colorScheme;
+
+    if (_isDraggingOverFabForFolderCreation && isAnythingSelected) {
+      // State: Dragging selected items over/near FAB to create folder
+      fabBackgroundColor =
+          Colors.green.shade300; // A distinct "drop target" color
+      fabForegroundColor = Colors.black87; // Ensure contrast
+      fabIconWidget = const Icon(Icons.create_new_folder_outlined);
+      fabLabel = "Create Folder";
+      fabAction = null; // Action is on drop (onAcceptWithDetails)
+    } else if (isAnythingSelected) {
+      // State: Items are selected, FAB offers to clear selection
+      fabBackgroundColor =
+          currentColorScheme.secondaryContainer; // Use a theme color
+      fabForegroundColor = currentColorScheme
+          .onSecondaryContainer; // Contrasting text/icon color
+      fabIconWidget = const Icon(Icons.deselect_outlined); // Changed icon
+      fabLabel = "Clear (${selectedItemIds.length})";
+      fabAction = () {
+        ref.read(boardNotifierProvider.notifier).clearSelection();
+      };
+    } else {
+      // State: Normal "New" item creation
+      fabBackgroundColor =
+          currentColorScheme.primaryContainer; // Use a theme color
+      fabForegroundColor =
+          currentColorScheme.onPrimaryContainer; // Contrasting text/icon color
+      fabIconWidget = const Icon(Icons.add);
+      fabLabel = "New";
+      // fabAction is already set to _showCreateItemDialog
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          currentUser != null ? '${currentUser.displayName ?? currentUser.email}\'s Board' : 'Board',
+          currentUser != null
+              ? '${currentUser.displayName ?? currentUser.email}\'s Board'
+              : 'Board',
         ),
         actions: [
           if (currentUser != null)
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: () async {
-                await ref
-                    .read(firebaseAuthProvider)
-                    .signOut();
+                await ref.read(firebaseAuthProvider).signOut();
                 // Invalidate the board provider to clear items and trigger re-fetch
                 ref.invalidate(boardNotifierProvider);
               },
@@ -75,10 +132,7 @@ class BoardScreen extends ConsumerWidget {
             ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
 
           return DragTarget<BoardItem>(
-            onWillAcceptWithDetails: (details) {
-              // Accept any BoardItem being dragged
-              return true;
-            },
+            onWillAcceptWithDetails: (details) => true,
             onAcceptWithDetails: (details) {
               final BoardItem droppedItem = details.data;
               // Find the RenderBox of this DragTarget to convert global drop offset to local
@@ -111,28 +165,26 @@ class BoardScreen extends ConsumerWidget {
                         itemWidget = NoteWidget(
                           key: itemKey,
                           note: item,
-                          onTap: () {
+                          onPrimaryAction: () {
                             print('Tapped note: ${item.id}');
                             Navigator.of(context).push(
-                              MaterialPageRoute( // Basic navigation
-                                builder: (context) => NoteEditorScreen(noteToEdit: item),
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    NoteEditorScreen(noteToEdit: item),
                               ),
                             );
                             // todo: replace with a custom PageRoute for animation
                           },
                         );
                       } else if (item is ImageItem) {
-                        itemWidget = ImageWidget(
-                          key: itemKey,
-                          imageItem: item,
-                        );
+                        itemWidget = ImageWidget(key: itemKey, imageItem: item);
                       } else if (item is FolderItem) {
                         itemWidget = FolderWidget(
                           key: itemKey,
                           folder: item,
-                          onTap: () {
-                            print('Tapped folder: ${item.id}');
-                            // todo: Implement folder opening
+                          onPrimaryAction: () {
+                            print('Primary action for folder: ${item.id}');
+                            // todo: implement folder opening logic
                           },
                         );
                       } else {
@@ -146,16 +198,16 @@ class BoardScreen extends ConsumerWidget {
                       return Positioned(
                         left: item.x,
                         top: item.y,
-                        child: Listener(
-                          onPointerDown: (_) {
-                            // Bring item to front when user starts interacting with it (e.g., before drag)
-                            ref
-                                .read(boardNotifierProvider.notifier)
-                                .bringToFront(item.id);
-                          },
-                          child:
-                              itemWidget,
-                        ),
+                        // child: Listener(
+                        //   onPointerDown: (_) {
+                        //     // Bring item to front when user starts interacting with it (e.g., before drag)
+                        //     ref
+                        //         .read(boardNotifierProvider.notifier)
+                        //         .bringToFront(item.id);
+                        //   },
+                        //   child: itemWidget,
+                        // ),
+                        child: itemWidget,
                       );
                     }).toList(),
                   );
@@ -170,13 +222,90 @@ class BoardScreen extends ConsumerWidget {
           );
         },
       ),
-      floatingActionButton:
-          currentUser !=
-              null // Only show FAB if user is logged in
-          ? FloatingActionButton.extended(
-              onPressed: () => showNewItemDialog(context, ref),
-              label: const Text('New'),
-              icon: const Icon(Icons.add),
+      floatingActionButton: currentUser != null
+          ? SizedBox(
+              width: 150 + 100,
+              height: 56 + 80,
+              // color: Colors.transparent,
+              // alignment: Alignment.bottomRight,
+              child: DragTarget<BoardItem>(
+                // FAB is also a DragTarget
+                onWillAcceptWithDetails: (details) {
+                  // Accept if items are selected and the dragged item is part of selection
+                  bool accept =
+                      isAnythingSelected &&
+                      selectedItemIds.contains(details.data.id);
+                  if (accept != _isDraggingOverFabForFolderCreation) {
+                    setState(() {
+                      _isDraggingOverFabForFolderCreation = accept;
+                    });
+                  }
+                  return accept;
+                },
+                onMove: (details) {
+                  final bool currentDraggableIsSelected = selectedItemIds
+                      .contains(details.data.id);
+                  if (isAnythingSelected &&
+                      currentDraggableIsSelected &&
+                      !_isDraggingOverFabForFolderCreation) {
+                    setState(() {
+                      _isDraggingOverFabForFolderCreation = true;
+                    });
+                  }
+                },
+                onLeave: (data) {
+                  // When item is dragged away from FAB
+                  if (_isDraggingOverFabForFolderCreation) {
+                    setState(() {
+                      _isDraggingOverFabForFolderCreation = false;
+                    });
+                  }
+                },
+                onAcceptWithDetails: (details) async {
+                  setState(() {
+                    _isDraggingOverFabForFolderCreation =
+                        false; // Reset on drop
+                  });
+                  await ref
+                      .read(boardNotifierProvider.notifier)
+                      .createFolderFromSelection("New Group");
+                },
+                builder: (context, candidateFabDropData, rejectedFabDropData) {
+                  return Stack(
+                    alignment:
+                        Alignment.bottomRight,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        color: Colors.transparent,
+                      ),
+                      FloatingActionButton.extended(
+                        onPressed: fabAction,
+                        label: Text(
+                          fabLabel,
+                          style: TextStyle(color: fabForegroundColor),
+                        ),
+                        icon: fabIconWidget,
+                        backgroundColor: fabBackgroundColor,
+                        // To make it more obvious it's a drop target when _isDraggingOverFabForFolderCreation:
+                        elevation: _isDraggingOverFabForFolderCreation
+                            ? 12.0
+                            : 6.0,
+                        shape: _isDraggingOverFabForFolderCreation
+                            ? RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: Colors.green.shade700,
+                                  width: 2.0,
+                                ),
+                                borderRadius: BorderRadius.circular(28.0),
+                              )
+                            : null, // Default shape
+                      ),
+                    ],
+                  );
+                },
+              ),
             )
           : null,
     );

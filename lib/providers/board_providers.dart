@@ -11,7 +11,7 @@ import '../models/note_item.dart';
 
 part 'board_providers.g.dart';
 
-
+Uuid _uuid = const Uuid();
 final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
 
@@ -32,8 +32,13 @@ final userBoardItemsCollectionProvider = Provider<CollectionReference<Map<String
 class BoardNotifier extends _$BoardNotifier {
   // Extends the generated _$BoardNotifier
 
+  final Set<String> _selectedItemIds = {};
+  Set<String> get selectedItemIds => Set.unmodifiable(_selectedItemIds); // Unmodifiable view
+
+
   @override
   Future<List<BoardItem>> build() async {
+    _selectedItemIds.clear();
     final itemsCollection = ref.watch(userBoardItemsCollectionProvider);
     print("BoardNotifier: build() called. ItemsCollection path: ${itemsCollection?.path}");
     if (itemsCollection == null) return [];
@@ -61,6 +66,24 @@ class BoardNotifier extends _$BoardNotifier {
       print("BoardNotifier: Error loading items from Firestore: $e\n$s");
       throw Exception("Failed to load board items: $e");
     }
+  }
+
+  void toggleItemSelection(String itemId) {
+    final currentItems = state.valueOrNull ?? [];
+    if (_selectedItemIds.contains(itemId)) {
+      _selectedItemIds.remove(itemId);
+    } else {
+      _selectedItemIds.add(itemId);
+    }
+    state = AsyncData(currentItems); // Re-emit to trigger UI update for selection visuals
+    print("Selected IDs: $_selectedItemIds");
+  }
+
+  void clearSelection() {
+    if (_selectedItemIds.isEmpty) return;
+    _selectedItemIds.clear();
+    state = AsyncData(state.valueOrNull ?? []);
+    print("Selection cleared.");
   }
 
   Future<void> addItem(BoardItem item) async {
@@ -186,4 +209,72 @@ class BoardNotifier extends _$BoardNotifier {
     }
     return maxZ + 1;
   }
+
+  Future<void> createFolderFromSelection(String folderName) async {
+    if (_selectedItemIds.isEmpty) return;
+
+    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
+    if (itemsCollection == null) return;
+
+    final currentBoardItems = state.valueOrNull ?? [];
+    if (currentBoardItems.isEmpty) return;
+
+    // Find a position for the new folder (e.g., average of selected items, or fixed)
+    // For simplicity, let's use a fixed offset or the position of the first selected item.
+    double folderX = 100;
+    double folderY = 100;
+    BoardItem? firstSelectedItem;
+    for(var item in currentBoardItems) {
+      if(_selectedItemIds.contains(item.id)){
+        firstSelectedItem = item;
+        break;
+      }
+    }
+    if(firstSelectedItem != null) {
+      folderX = firstSelectedItem.x + 20; // Slightly offset
+      folderY = firstSelectedItem.y + 20;
+    }
+
+
+    final newFolder = FolderItem(
+      id: _uuid.v4(),
+      x: folderX,
+      y: folderY,
+      name: folderName,
+      itemIds: List.from(_selectedItemIds), // Copy the selected IDs
+      zIndex: getNextZIndex(), // Place it on top
+    );
+
+    final itemsToKeepOnBoard = currentBoardItems.where((item) => !_selectedItemIds.contains(item.id)).toList();
+
+    state = AsyncData([...itemsToKeepOnBoard, newFolder]);
+
+    await _saveItemToFirestore(newFolder);
+
+    for (String itemIdToRemove in _selectedItemIds) {
+      try {
+        await itemsCollection.doc(itemIdToRemove).delete();
+        print("BoardNotifier: Deleted item $itemIdToRemove from board (moved to folder).");
+      } catch (e) {
+        print("BoardNotifier: Error deleting item $itemIdToRemove: $e");
+      }
+    }
+
+    _selectedItemIds.clear();
+  }
+
+  Future<void> _saveItemToFirestore(BoardItem item) async {
+    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
+    if (itemsCollection == null) {
+      print("BoardNotifier: User not logged in. Cannot save item ${item.id}.");
+      return;
+    }
+    try {
+      await itemsCollection.doc(item.id).set(item.toJson());
+      print("BoardNotifier: Item ${item.id} saved to Firestore (from _saveItemToFirestore helper).");
+    } catch (e, s) {
+      print("BoardNotifier: Error saving item ${item.id} to Firestore (from helper): $e\n$s");
+    }
+  }
+
 }
