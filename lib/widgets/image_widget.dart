@@ -1,4 +1,5 @@
 import 'package:crux_notes/widgets/resize_handle.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,11 +21,6 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // final selectedIds = ref.watch(
-    //   boardNotifierProvider.select((asyncValue) {
-    //     return ref.read(boardNotifierProvider.notifier).selectedItemIds;
-    //   }),
-    // );
 
     final boardState = ref.watch(boardNotifierProvider);
     final Set<String> currentSelectedIds = boardState.hasValue
@@ -34,6 +30,7 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
 
     final imageContent = FittedBox(
       fit: BoxFit.cover,
+      clipBehavior: Clip.antiAlias,
       child: Image.network(
         widget.imageItem.imageUrl,
         key: ValueKey(widget.imageItem.imageUrl),
@@ -89,119 +86,73 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
     //   ),
     // );
 
-    final feedbackWidget = Material(
-      // Still need Material for elevation if Draggable is used
-      elevation: 4.0,
-      color: Colors.transparent,
-      child: Container(
-        width: widget.imageItem.width,
-        height: widget.imageItem.height,
-        decoration: BoxDecoration(
-          color: Colors.blueGrey.withAlpha(150), // Simple solid color
-          border: Border.all(color: Colors.grey),
-        ),
-        child: const Center(
-          child: Text(
-            "Dragging...",
-            style: TextStyle(color: Colors.white, fontSize: 10),
-          ),
-        ), // No image
-      ),
-    );
-
-    final childWhenDraggingWidget = Container(
-      width: widget.imageItem.width,
-      height: widget.imageItem.height,
-      decoration: BoxDecoration(
-        color: Colors.grey.withAlpha(50), // Simple solid color
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      // No image
-    );
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
-      child: Draggable<BoardItem>(
-        // Main Draggable for moving the item
-        data: widget.imageItem,
-        feedback: feedbackWidget,
-        childWhenDragging: childWhenDraggingWidget,
-        dragAnchorStrategy: childDragAnchorStrategy, //todo: check??
-        onDragStarted: () {
-          // final notifier = ref.read(boardNotifierProvider.notifier);
-          // if (!isSelected) {
-          //   notifier.clearSelection();
-          //   notifier.toggleItemSelection(widget.imageItem.id);
-          // }
-          // ref.read(boardNotifierProvider.notifier).bringToFront(widget.imageItem.id);
-        },
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                final notifier = ref.read(boardNotifierProvider.notifier);
-                // Future.delayed(Duration.zero, () { notifier.bringToFront(widget.imageItem.id); });
-                // notifier.bringToFront(widget.imageItem.id);
-                // if (notifier.selectedItemIds.isNotEmpty) {
-                //   notifier.toggleItemSelection(widget.imageItem.id);
-                // } else {
-                //   // No items selected, tap selects this one
-                  notifier.toggleItemSelection(widget.imageItem.id);
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    notifier.bringToFront(widget.imageItem.id);
-                  }
-                });
-                // }
-              },
-              onLongPress: () {
-                final notifier = ref.read(boardNotifierProvider.notifier);
-                // Future.delayed(Duration.zero, () { notifier.bringToFront(widget.imageItem.id); });
-                // notifier.bringToFront(widget.imageItem.id);
-                notifier.toggleItemSelection(widget.imageItem.id);
-              },
-              child: Container(
-                // The image itself
-                width: widget.imageItem.width,
-                height: widget.imageItem.height,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    // Modified border
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : (_isHovering
-                              ? Theme.of(context).colorScheme.primary.withAlpha(
-                                  (255 * 0.7).round(),
-                                )
-                              : Colors.grey.shade600),
-                    // width: isSelected ? 2.5 : (_isHovering ? 1.5 : 1),
-                    width: 2.5,
+    return Positioned(
+      left: widget.imageItem.x,
+      top: widget.imageItem.y,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovering = true),
+        onExit: (_) => setState(() => _isHovering = false),
+        child: GestureDetector( // Main GestureDetector for moving the whole image
+          behavior: HitTestBehavior.deferToChild,
+          onPanStart: (details) {
+            ref.read(boardNotifierProvider.notifier).bringToFront(widget.imageItem.id);
+            // Handle selection if not already selected
+            final notifier = ref.read(boardNotifierProvider.notifier);
+            if (!isSelected) {
+              notifier.clearSelection();
+              notifier.toggleItemSelection(widget.imageItem.id);
+            }
+          },
+          onPanUpdate: (details) {
+            // If a handle's onPanUpdate is active, it should consume the event.
+            ref.read(boardNotifierProvider.notifier).updateItemGeometricProperties(
+              widget.imageItem.id,
+              newX: widget.imageItem.x + details.delta.dx,
+              newY: widget.imageItem.y + details.delta.dy,
+            );
+          },
+          onPanEnd: (details) {
+          },
+          onTap: () {
+            final notifier = ref.read(boardNotifierProvider.notifier);
+            notifier.toggleItemSelection(widget.imageItem.id);
+          },
+          onLongPress: (){
+            final notifier = ref.read(boardNotifierProvider.notifier);
+            notifier.toggleItemSelection(widget.imageItem.id);
+          },
+          child: SizedBox(
+            width: widget.imageItem.width,
+            height: widget.imageItem.height,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : (_isHovering
+                                ? Theme.of(context).colorScheme.primary.withAlpha(
+                                    (255 * 0.7).round(),
+                                  )
+                                : Colors.grey.shade600),
+                      // width: isSelected ? 2.5 : (_isHovering ? 1.5 : 1),
+                      width: 2.5,
+                    ),
                   ),
+                  child: imageContent,
                 ),
-                child: imageContent,
-              ),
+                // Resize Handles
+                ResizeHandleWidget(imageItem: widget.imageItem, corner: ResizeCorner.topLeft),
+                ResizeHandleWidget(imageItem: widget.imageItem, corner: ResizeCorner.topRight),
+                ResizeHandleWidget(imageItem: widget.imageItem, corner: ResizeCorner.bottomLeft),
+                ResizeHandleWidget(imageItem: widget.imageItem, corner: ResizeCorner.bottomRight),
+              ],
             ),
-            ResizeHandleWidget(
-              imageItem: widget.imageItem,
-              corner: ResizeCorner.topLeft,
-            ),
-            ResizeHandleWidget(
-              imageItem: widget.imageItem,
-              corner: ResizeCorner.topRight,
-            ),
-            ResizeHandleWidget(
-              imageItem: widget.imageItem,
-              corner: ResizeCorner.bottomLeft,
-            ),
-            ResizeHandleWidget(
-              imageItem: widget.imageItem,
-              corner: ResizeCorner.bottomRight,
-            ),
-          ],
+          ),
         ),
       ),
     );

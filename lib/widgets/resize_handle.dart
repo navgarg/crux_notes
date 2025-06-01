@@ -154,22 +154,6 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
               child: AnimatedOpacity(
                 opacity: _isHandleHovering ? 1.0 : 0,
                 duration: const Duration(milliseconds: 100),
-                // child: Container(
-                //   width:
-                //       _interactiveHandleAreaSize,
-                //   height: _interactiveHandleAreaSize,
-                  // decoration: BoxDecoration(
-                  //   color: Theme.of(
-                  //     context,
-                  //   ).colorScheme.primaryContainer.withAlpha(200),
-                  //   shape: BoxShape.circle,
-                  //   border: Border.all(
-                  //     color: Theme.of(
-                  //       context,
-                  //     ).colorScheme.onPrimaryContainer.withAlpha(150),
-                  //     width: 1,
-                  //   ),
-                  // ),
                   child: Icon(
                     iconData,
                     size: _visualHandleSize * 0.6,
