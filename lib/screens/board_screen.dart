@@ -1,3 +1,6 @@
+import 'dart:math';
+
+import 'package:crux_notes/utils/board_layout_utils.dart';
 import 'package:crux_notes/widgets/new_item_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -10,13 +13,13 @@ import '../models/image_item.dart';
 import '../models/note_item.dart';
 import '../providers/auth_providers.dart';
 import '../providers/board_providers.dart' hide firebaseAuthProvider;
-import '../widgets/folder_widget.dart';
-import '../widgets/image_widget.dart';
+import '../widgets/board_view_widget.dart';
+import '../widgets/folders/folder_widget.dart';
+import '../widgets/images/image_widget.dart';
 import '../widgets/note_widget.dart';
 import 'note_editor_screen.dart';
 
 class BoardScreen extends ConsumerStatefulWidget {
-  // Changed to ConsumerStatefulWidget
   const BoardScreen({super.key});
 
   @override
@@ -35,7 +38,6 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     );
     print("Building BoardScreen for user: ${currentUser?.email ?? 'Guest'}");
 
-    final boardNotifier = ref.read(boardNotifierProvider.notifier);
     final Set<String> selectedItemIds = ref.watch(
       boardNotifierProvider.select(
         (state) => state.valueOrNull != null
@@ -110,8 +112,16 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
               child: Text("Please log in to view your board."),
             );
           }
+
+          final openFolderIds = ref
+              .watch(boardNotifierProvider.notifier)
+              .openFolderIds;
+          final openFolderContentsMap = ref
+              .watch(boardNotifierProvider.notifier)
+              .openFolderContents;
+
           // If no items, show empty state
-          if (boardItems.isEmpty) {
+          if (boardItems.isEmpty && openFolderIds.isEmpty) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -126,92 +136,16 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
             );
           }
 
-          // Sort items by zIndex for correct visual stacking
-          // Creating a new list for sorting to avoid modifying the provider's state list directly
-          final sortedBoardItems = List<BoardItem>.from(boardItems)
-            ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+          print("BoardScreen: All Board Items Count: ${boardItems.length}");
+          print("BoardScreen: Open Folder IDs: $openFolderIds");
+          print(
+            "BoardScreen: Open Folder Contents Map: ${openFolderContentsMap.map((k, v) => MapEntry(k, v.length))}",
+          );
 
-          return DragTarget<BoardItem>(
-            onWillAcceptWithDetails: (details) => true,
-            onAcceptWithDetails: (details) {
-              final BoardItem droppedItem = details.data;
-              // Find the RenderBox of this DragTarget to convert global drop offset to local
-              final RenderBox renderBox =
-                  context.findRenderObject() as RenderBox;
-              final Offset localOffset = renderBox.globalToLocal(
-                details.offset,
-              );
-
-              final boardNotifier = ref.read(boardNotifierProvider.notifier);
-              boardNotifier.updateItemGeometricProperties(
-                droppedItem.id,
-                newX: localOffset.dx,
-                newY: localOffset.dy,
-              );
-              // Bring the dropped item to the front visually
-              boardNotifier.bringToFront(droppedItem.id);
-            },
-            builder:
-                (
-                  BuildContext context,
-                  List<BoardItem?> candidateData,
-                  List<dynamic> rejectedData,
-                ) {
-                  return Stack(
-                    children: sortedBoardItems.map<Widget>((BoardItem item) {
-                      Widget itemWidget;
-                      final Key itemKey = ValueKey(item.id);
-                      if (item is NoteItem) {
-                        itemWidget = NoteWidget(
-                          key: itemKey,
-                          note: item,
-                          onPrimaryAction: () {
-                            print('Tapped note: ${item.id}');
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    NoteEditorScreen(noteToEdit: item),
-                              ),
-                            );
-                            // todo: replace with a custom PageRoute for animation
-                          },
-                        );
-                      } else if (item is ImageItem) {
-                        itemWidget = ImageWidget(key: itemKey, imageItem: item);
-                      } else if (item is FolderItem) {
-                        itemWidget = FolderWidget(
-                          key: itemKey,
-                          folder: item,
-                          onPrimaryAction: () {
-                            print('Primary action for folder: ${item.id}');
-                            // todo: implement folder opening logic
-                          },
-                        );
-                      } else {
-                        // Fallback for any unknown item types
-                        itemWidget = Container(
-                          key: itemKey,
-                          child: Text('Unknown item type: ${item.runtimeType}'),
-                        );
-                      }
-
-                      return Positioned(
-                        left: item.x,
-                        top: item.y,
-                        // child: Listener(
-                        //   onPointerDown: (_) {
-                        //     // Bring item to front when user starts interacting with it (e.g., before drag)
-                        //     ref
-                        //         .read(boardNotifierProvider.notifier)
-                        //         .bringToFront(item.id);
-                        //   },
-                        //   child: itemWidget,
-                        // ),
-                        child: itemWidget,
-                      );
-                    }).toList(),
-                  );
-                },
+          return BoardViewWidget(
+            boardItems: boardItems,
+            openFolderIds: openFolderIds,
+            // openFolderContentsMap: openFolderContentsMap, // Not strictly needed by BoardViewWidget anymore
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -272,8 +206,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                 },
                 builder: (context, candidateFabDropData, rejectedFabDropData) {
                   return Stack(
-                    alignment:
-                        Alignment.bottomRight,
+                    alignment: Alignment.bottomRight,
                     children: [
                       Container(
                         width: double.infinity,

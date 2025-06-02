@@ -35,25 +35,34 @@ class BoardNotifier extends _$BoardNotifier {
   final Set<String> _selectedItemIds = {};
   Set<String> get selectedItemIds => Set.unmodifiable(_selectedItemIds); // Unmodifiable view
 
+  final Set<String> _openFolderIds = {};
+  Set<String> get openFolderIds => Set.unmodifiable(_openFolderIds);
+
+  final Map<String, List<BoardItem>> _openFolderContents = {};
+  Map<String, List<BoardItem>> get openFolderContents => Map.unmodifiable(_openFolderContents);
 
   @override
   Future<List<BoardItem>> build() async {
     _selectedItemIds.clear();
     final itemsCollection = ref.watch(userBoardItemsCollectionProvider);
     print("BoardNotifier: build() called. ItemsCollection path: ${itemsCollection?.path}");
-    if (itemsCollection == null) return [];
+    if (itemsCollection == null) {
+      _openFolderIds.clear(); // Clear open folders if user logs out
+      _openFolderContents.clear();
+      return [];
+    }
 
     try {
-      final snapshot = await itemsCollection.orderBy('zIndex').get(); // Good to order
+      final snapshot = await itemsCollection.orderBy('zIndex').get();
       if (snapshot.docs.isEmpty) {
         print("BoardNotifier: No items found in Firestore. Returning empty list.");
+        _openFolderIds.clear();
+        _openFolderContents.clear();
         return [];
       }
       print("BoardNotifier: Loaded ${snapshot.docs.length} items from Firestore.");
-      return snapshot.docs.map((doc) {
+      final allItems = snapshot.docs.map((doc) {
         final data = doc.data();
-        // The ID is part of the item's data if saved correctly by item.toJson()
-        // If not, you'd do: data['id'] = doc.id;
         final typeName = data['type'] as String? ?? BoardItemType.note.name;
         final type = BoardItemType.values.firstWhere((e) => e.name == typeName, orElse: () => BoardItemType.note);
         switch (type) {
@@ -62,10 +71,26 @@ class BoardNotifier extends _$BoardNotifier {
           case BoardItemType.folder: return FolderItem.fromJson(data);
         }
       }).toList();
+      await _repopulateOpenFolderContents(allItems);
+      return allItems;
+
     } catch (e, s) {
       print("BoardNotifier: Error loading items from Firestore: $e\n$s");
+      _openFolderIds.clear();
+      _openFolderContents.clear();
       throw Exception("Failed to load board items: $e");
     }
+  }
+  Future<void> _repopulateOpenFolderContents(List<BoardItem> allItems) async {
+    final Map<String, List<BoardItem>> newOpenFolderContents = {};
+    for (final folderId in _openFolderIds) {
+      final folder = allItems.firstWhere((item) => item.id == folderId && item is FolderItem, orElse: () => FolderItem(id: 'error', x:0,y:0,zIndex:0)) as FolderItem?;
+      if (folder != null && folder.id != 'error') {
+        newOpenFolderContents[folderId] = allItems.where((item) => folder.itemIds.contains(item.id)).toList();
+      }
+    }
+    _openFolderContents.clear();
+    _openFolderContents.addAll(newOpenFolderContents);
   }
 
   void toggleItemSelection(String itemId) {
@@ -123,7 +148,6 @@ class BoardNotifier extends _$BoardNotifier {
       state = AsyncData(currentItems);
     }
   }
-
 
   /// Updates geometric properties (position, size, zIndex) of an item.
   Future<void> updateItemGeometricProperties(
@@ -211,56 +235,74 @@ class BoardNotifier extends _$BoardNotifier {
   }
 
   Future<void> createFolderFromSelection(String folderName) async {
-    if (_selectedItemIds.isEmpty) return;
+    if (_selectedItemIds.isEmpty) {
+      print("BoardNotifier: No items selected to create a folder.");
+      return;
+    }
 
     final itemsCollection = ref.read(userBoardItemsCollectionProvider);
-    if (itemsCollection == null) return;
+    if (itemsCollection == null) {
+      print("BoardNotifier: User not logged in. Cannot create folder."); // Good to add this print
+      return;
+    }
 
     final currentBoardItems = state.valueOrNull ?? [];
     if (currentBoardItems.isEmpty) return;
+    if (currentBoardItems.isEmpty && _selectedItemIds.isNotEmpty) {
+      print("BoardNotifier: Warning - selected items exist but board state is empty. Clearing selection.");
+      _selectedItemIds.clear();
+      return;
+    }
 
-    // Find a position for the new folder (e.g., average of selected items, or fixed)
-    // For simplicity, let's use a fixed offset or the position of the first selected item.
     double folderX = 100;
     double folderY = 100;
     BoardItem? firstSelectedItem;
-    for(var item in currentBoardItems) {
-      if(_selectedItemIds.contains(item.id)){
-        firstSelectedItem = item;
-        break;
-      }
-    }
-    if(firstSelectedItem != null) {
+
+    firstSelectedItem = currentBoardItems.firstWhere(
+            (item) => _selectedItemIds.contains(item.id),
+        orElse: () {
+          print("BoardNotifier: Warning - Could not find first selected item instance in current board items.");
+          return currentBoardItems.isNotEmpty ? currentBoardItems.first : NoteItem(id:'temp', x:100, y:100, zIndex:0); // Temporary placeholder if board empty
+        }
+    );
+
+    if(firstSelectedItem.id != 'temp') {
       folderX = firstSelectedItem.x + 20; // Slightly offset
       folderY = firstSelectedItem.y + 20;
     }
 
+    final List<String> itemsToPutInFolder = List.from(_selectedItemIds);
+    print("BoardNotifier: Creating folder with these item IDs: $itemsToPutInFolder");
 
     final newFolder = FolderItem(
       id: _uuid.v4(),
       x: folderX,
       y: folderY,
       name: folderName,
-      itemIds: List.from(_selectedItemIds), // Copy the selected IDs
+      // itemIds: List.from(_selectedItemIds), // Copy the selected IDs
+      itemIds: itemsToPutInFolder,
       zIndex: getNextZIndex(), // Place it on top
     );
 
-    final itemsToKeepOnBoard = currentBoardItems.where((item) => !_selectedItemIds.contains(item.id)).toList();
+    // final itemsToKeepOnBoard = currentBoardItems.where((item) => !_selectedItemIds.contains(item.id)).toList();
+    // state = AsyncData([...itemsToKeepOnBoard, newFolder]);
 
-    state = AsyncData([...itemsToKeepOnBoard, newFolder]);
+    final optimisticBoardItemsList = [...currentBoardItems, newFolder];
+    state = AsyncData(optimisticBoardItemsList);
+    print('BoardNotifier: Optimistically added new folder ${newFolder.id}');
 
-    await _saveItemToFirestore(newFolder);
-
-    for (String itemIdToRemove in _selectedItemIds) {
-      try {
-        await itemsCollection.doc(itemIdToRemove).delete();
-        print("BoardNotifier: Deleted item $itemIdToRemove from board (moved to folder).");
-      } catch (e) {
-        print("BoardNotifier: Error deleting item $itemIdToRemove: $e");
-      }
+    try {
+      await itemsCollection.doc(newFolder.id).set(newFolder.toJson());
+      print("BoardNotifier: New folder ${newFolder.id} saved with itemIds: ${newFolder.itemIds}");
+    } catch (e, s) {
+      print("BoardNotifier: Error saving new folder ${newFolder.id} to Firestore: $e\n$s");
+      state = AsyncData(List.from(currentBoardItems));
     }
 
     _selectedItemIds.clear();
+    print("BoardNotifier: Selection cleared after folder creation.");
+    // state = AsyncData(List.from(itemsToKeepOnBoard));
+    state = AsyncData(List.from(optimisticBoardItemsList));
   }
 
   Future<void> _saveItemToFirestore(BoardItem item) async {
@@ -275,6 +317,36 @@ class BoardNotifier extends _$BoardNotifier {
     } catch (e, s) {
       print("BoardNotifier: Error saving item ${item.id} to Firestore (from helper): $e\n$s");
     }
+  }
+
+  Future<void> toggleFolderOpenState(String folderId) async {
+    final currentAllItems = state.valueOrNull ?? [];
+    if (currentAllItems.isEmpty) return;
+
+    final folder = currentAllItems.firstWhere((item) => item.id == folderId && item is FolderItem, orElse: () => FolderItem(id:'error', x:0,y:0,zIndex:0)) as FolderItem?;
+
+    if (folder == null || folder.id == 'error') {
+      print("BoardNotifier: Folder with ID $folderId not found.");
+      return;
+    }
+    print("BoardNotifier: Toggling folder ${folder.id}. Current item IDs in folder object: ${folder.itemIds}");
+
+    if (_openFolderIds.contains(folderId)) {
+      _openFolderIds.remove(folderId);
+      _openFolderContents.remove(folderId);
+      print("BoardNotifier: Folder $folderId closed.");
+    } else {
+      _openFolderIds.add(folderId);
+      final itemsInsideFolder = currentAllItems.where((item) => folder.itemIds.contains(item.id)).toList();
+      _openFolderContents[folderId] = itemsInsideFolder;
+      print("BoardNotifier: Folder $folderId opened with ${itemsInsideFolder.length} items.");
+      for (var item in itemsInsideFolder) {
+        print("  - Found item in folder: ${item.id} of type ${item.type.name}");
+      }
+      _openFolderContents[folderId] = itemsInsideFolder;
+      print("BoardNotifier: Folder $folderId opened with ${itemsInsideFolder.length} items (actual count in map).");
+    }
+    state = AsyncData(List.from(currentAllItems));
   }
 
 }

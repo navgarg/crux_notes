@@ -2,8 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/image_item.dart';
-import '../providers/board_providers.dart';
+import '../../models/image_item.dart';
+import '../../providers/board_providers.dart';
 
 enum ResizeCorner { topLeft, topRight, bottomLeft, bottomRight }
 

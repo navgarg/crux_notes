@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/board_item.dart';
-import '../models/folder_item.dart';
-import '../providers/board_providers.dart';
+import '../../models/board_item.dart';
+import '../../models/folder_item.dart';
+import '../../providers/board_providers.dart';
 
 class FolderWidget extends ConsumerWidget {
   final FolderItem folder;
@@ -13,22 +13,31 @@ class FolderWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // final selectedIds = ref.watch(
-    //   boardNotifierProvider.select((asyncValue) {
-    //     return ref.read(boardNotifierProvider.notifier).selectedItemIds;
-    //   }),
-    // );
+    final boardNotifier = ref.read(boardNotifierProvider.notifier);
 
-    final boardState = ref.watch(boardNotifierProvider);
-    final Set<String> currentSelectedIds = boardState.hasValue
-        ? ref.read(boardNotifierProvider.notifier).selectedItemIds
-        : const {};
-    final isSelected = currentSelectedIds.contains(folder.id);
+    final openFolderIds = ref.watch(
+      boardNotifierProvider.select(
+        (s) => s.valueOrNull != null
+            ? boardNotifier.openFolderIds
+            : const <String>{},
+      ),
+    );
+    final isSelected = ref
+        .watch(
+          boardNotifierProvider.select(
+            (s) => s.valueOrNull != null
+                ? boardNotifier.selectedItemIds
+                : const <String>{},
+          ),
+        )
+        .contains(folder.id);
+
+    final bool isOpen = openFolderIds.contains(folder.id);
 
     final folderContent = Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.folder, size: 40, color: Colors.brown.shade700),
+        Icon(isOpen ? Icons.folder_open : Icons.folder, size: 40, color: Colors.brown.shade700),
         const SizedBox(height: 8),
         Text(
           folder.name,
@@ -76,21 +85,24 @@ class FolderWidget extends ConsumerWidget {
       data: folder,
       feedback: feedbackWidget,
       childWhenDragging: childWhenDraggingWidget,
+      onDragStarted: () {
+        boardNotifier.bringToFront(folder.id);
+        if (!isSelected) {
+          boardNotifier.clearSelection();
+          boardNotifier.toggleItemSelection(folder.id);
+        }
+      },
       child: GestureDetector(
         onTap: () {
-          final notifier = ref.read(boardNotifierProvider.notifier);
-          notifier.bringToFront(folder.id);
-          if (notifier.selectedItemIds.isNotEmpty) {
-            notifier.toggleItemSelection(folder.id);
-          } else if (onPrimaryAction != null) {
-            onPrimaryAction!();
-          } else {
-            notifier.toggleItemSelection(folder.id);
+          if (boardNotifier.selectedItemIds.isNotEmpty && boardNotifier.selectedItemIds.length >1 || (boardNotifier.selectedItemIds.length == 1 && !isSelected)) {
+            boardNotifier.toggleItemSelection(folder.id);
+          } else { // this is the only selected item
+            boardNotifier.toggleFolderOpenState(folder.id);
           }
         },
         onLongPress: () {
           final notifier = ref.read(boardNotifierProvider.notifier);
-          notifier.bringToFront(folder.id);
+          // notifier.bringToFront(folder.id);
           notifier.toggleItemSelection(folder.id);
         },
         child: Container(
@@ -98,10 +110,14 @@ class FolderWidget extends ConsumerWidget {
           height: folder.height,
           padding: const EdgeInsets.all(8.0),
           decoration: BoxDecoration(
-            color: Colors.brown.shade300,
+            color: isOpen ? Colors.brown.shade400 : Colors.brown.shade300,
             borderRadius: BorderRadius.circular(8),
-            border: isSelected // Conditional border
-                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 3)
+            border:
+                isSelected // Conditional border
+                ? Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 3,
+                  )
                 : Border.all(color: Colors.transparent, width: 3),
             boxShadow: [
               BoxShadow(

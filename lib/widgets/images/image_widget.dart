@@ -1,11 +1,10 @@
-import 'package:crux_notes/widgets/resize_handle.dart';
+import 'package:crux_notes/widgets/images/resize_handle.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../models/board_item.dart';
-import '../models/image_item.dart';
-import '../providers/board_providers.dart';
+import '../../models/board_item.dart';
+import '../../models/image_item.dart';
+import '../../providers/board_providers.dart';
 
 class ImageWidget extends ConsumerStatefulWidget {
   final ImageItem imageItem;
@@ -59,32 +58,6 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
             },
       ),
     );
-
-    // final feedbackWidget = Material(
-    //   elevation: 4.0,
-    //   color: Colors.transparent,
-    //   child: Container(
-    //     width: widget.imageItem.width,
-    //     height: widget.imageItem.height,
-    //     clipBehavior: Clip.antiAlias,
-    //     decoration: BoxDecoration(
-    //       border: Border.all(color: Colors.grey.withAlpha((255 * 0.8).round())),
-    //     ),
-    //     child: Opacity(opacity: 0.8, child: imageContent),
-    //   ),
-    // );
-    //
-    // final childWhenDraggingWidget = Container(
-    //   width: widget.imageItem.width,
-    //   height: widget.imageItem.height,
-    //   decoration: BoxDecoration(
-    //     border: Border.all(
-    //       color: Colors.grey.shade400,
-    //       style: BorderStyle.solid,
-    //     ),
-    //     color: Colors.grey.withAlpha((255 * 0.1).round()),
-    //   ),
-    // );
 
     return Positioned(
       left: widget.imageItem.x,
