@@ -86,7 +86,7 @@ class NoteWidget extends ConsumerWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         dragStartBehavior: DragStartBehavior.down,
-        onTap: () {
+        onDoubleTap: () {
           // If there are items already selected, tapping another toggles its selection.
           // If no items are selected, primary tap opens the editor.
           final notifier = ref.read(boardNotifierProvider.notifier);
@@ -110,7 +110,7 @@ class NoteWidget extends ConsumerWidget {
             notifier.toggleItemSelection(note.id); // Select this
           }
         },
-        onLongPress: () {
+        onTap: () {
           final notifier = ref.read(boardNotifierProvider.notifier);
           notifier.bringToFront(note.id);
           notifier.toggleItemSelection(note.id);
@@ -124,7 +124,7 @@ class NoteWidget extends ConsumerWidget {
             color: note.color,
             borderRadius: BorderRadius.circular(8),
             border: isSelected
-                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 3)
+                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 4)
                 : Border.all(color: Colors.transparent, width: 2.5),
             boxShadow: [
               BoxShadow(

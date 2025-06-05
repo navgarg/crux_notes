@@ -144,7 +144,7 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
                                   ).colorScheme.primary.withAlpha(180)
                                 : Colors.grey.shade600),
                       width: isSelected
-                          ? 2.5
+                          ? 4
                           : (_isHovering || _isCurrentlyResizing ? 1.5 : 1),
                     ),
                   ),

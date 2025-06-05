@@ -70,7 +70,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
       fabForegroundColor = currentColorScheme
           .onSecondaryContainer;
       fabIconWidget = const Icon(Icons.deselect_outlined);
-      fabLabel = "Clear (${selectedItemIds.length})";
+      fabLabel = "Clear Selection (${selectedItemIds.length})";
       fabAction = () {
         ref.read(boardNotifierProvider.notifier).clearSelection();
       };

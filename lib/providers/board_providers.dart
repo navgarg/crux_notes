@@ -492,6 +492,7 @@ class BoardNotifier extends _$BoardNotifier {
       print("BoardNotifier: Error batch updating folders for adding item $itemIdToAdd: $e\n$s");
       ref.invalidateSelf();
     }
+    clearSelection();
   }
 
   Future<void> removeItemFromFolder(String sourceFolderId, String itemIdToRemove, {double? newX, double? newY}) async {
@@ -548,5 +549,7 @@ class BoardNotifier extends _$BoardNotifier {
       print("BoardNotifier: Error in batch update for removing $itemIdToRemove from folder: $e\n$s");
       ref.invalidateSelf();
     }
+
+    clearSelection();
   }
 }

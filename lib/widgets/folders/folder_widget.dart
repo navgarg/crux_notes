@@ -6,14 +6,80 @@ import '../../models/folder_item.dart';
 import '../../models/note_item.dart';
 import '../../providers/board_providers.dart';
 
-class FolderWidget extends ConsumerWidget {
+class FolderWidget extends ConsumerStatefulWidget {
+  // Changed to StatefulWidget
   final FolderItem folder;
-  final VoidCallback? onPrimaryAction;
+  final VoidCallback? onPrimaryAction; // Keep this if used elsewhere
 
   const FolderWidget({super.key, required this.folder, this.onPrimaryAction});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FolderWidget> createState() => _FolderWidgetState();
+}
+
+class _FolderWidgetState extends ConsumerState<FolderWidget> {
+  bool _isEditingName = false;
+  late TextEditingController _nameEditingController;
+  FocusNode _nameFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _nameEditingController = TextEditingController(text: widget.folder.name);
+    _nameFocusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant FolderWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.folder.name != oldWidget.folder.name && !_isEditingName) {
+      _nameEditingController.text = widget.folder.name;
+    }
+  }
+
+  void _handleFocusChange() {
+    if (!_nameFocusNode.hasFocus && _isEditingName) {
+      // Focus lost while editing, submit the changes
+      _submitNewName();
+    }
+  }
+
+  void _submitNewName() {
+    if (_nameEditingController.text.isNotEmpty &&
+        _nameEditingController.text != widget.folder.name) {
+      ref
+          .read(boardNotifierProvider.notifier)
+          .updateItem(
+            FolderItem(
+              id: widget.folder.id,
+              x: widget.folder.x,
+              y: widget.folder.y,
+              width: widget.folder.width,
+              height: widget.folder.height,
+              zIndex: widget.folder.zIndex,
+              name: _nameEditingController.text,
+              itemIds: widget.folder.itemIds,
+              createdAt: widget.folder.createdAt,
+            ),
+          );
+    }
+    if (mounted) {
+      setState(() {
+        _isEditingName = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameFocusNode.removeListener(_handleFocusChange);
+    _nameEditingController.dispose();
+    _nameFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final boardNotifier = ref.read(boardNotifierProvider.notifier);
 
     final openFolderIds = ref.watch(
@@ -31,9 +97,47 @@ class FolderWidget extends ConsumerWidget {
                 : const <String>{},
           ),
         )
-        .contains(folder.id);
+        .contains(widget.folder.id);
 
-    final bool isOpen = openFolderIds.contains(folder.id);
+    final bool isOpen = openFolderIds.contains(widget.folder.id);
+
+    Widget nameWidget;
+    if (_isEditingName) {
+      nameWidget = SizedBox(
+        height: 25,
+        child: TextField(
+          controller: _nameEditingController,
+          focusNode: _nameFocusNode,
+          autofocus: true,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.brown.shade900,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+          decoration: const InputDecoration(
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 4,
+            ),
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (_) => _submitNewName(),
+        ),
+      );
+    } else {
+      nameWidget = Text(
+        widget.folder.name,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: Colors.brown.shade900,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    }
 
     final folderContent = Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -44,15 +148,35 @@ class FolderWidget extends ConsumerWidget {
           color: Colors.brown.shade700,
         ),
         const SizedBox(height: 8),
-        Text(
-          folder.name,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.brown.shade900,
-            fontWeight: FontWeight.bold,
-          ),
+        GestureDetector(
+          onDoubleTap: () {
+            if (isOpen) {
+              print("Renaming open folders is currently disabled.");
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Close the folder to rename it."),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              return;
+            }
+            if (mounted) {
+              setState(() {
+                _isEditingName = true;
+                _nameEditingController.text =
+                    widget.folder.name;
+                // Request focus after a short delay to ensure TextField is built
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _nameFocusNode.requestFocus();
+                  _nameEditingController.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: _nameEditingController.text.length,
+                  );
+                });
+              });
+            }
+          },
+          child: nameWidget,
         ),
       ],
     );
@@ -61,8 +185,8 @@ class FolderWidget extends ConsumerWidget {
       elevation: 4.0,
       color: Colors.transparent,
       child: Container(
-        width: folder.width,
-        height: folder.height,
+        width: widget.folder.width,
+        height: widget.folder.height,
         padding: const EdgeInsets.all(8.0),
         decoration: BoxDecoration(
           color: Colors.brown.shade300.withAlpha((255 * 0.8).round()),
@@ -73,8 +197,8 @@ class FolderWidget extends ConsumerWidget {
     );
 
     final childWhenDraggingWidget = Container(
-      width: folder.width,
-      height: folder.height,
+      width: widget.folder.width,
+      height: widget.folder.height,
       padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
         color: Colors.brown.shade300.withAlpha((255 * 0.3).round()),
@@ -89,26 +213,26 @@ class FolderWidget extends ConsumerWidget {
     if (isOpen) {
       // If folder is open, it's not a drop target itself (bounding box is)
       return Draggable<BoardItem>(
-        data: folder,
+        data: widget.folder,
         feedback: feedbackWidget,
-        childWhenDragging:
-            childWhenDraggingWidget,
+        childWhenDragging: childWhenDraggingWidget,
         onDragStarted: () {
-          boardNotifier.bringToFront(folder.id);
+          boardNotifier.bringToFront(widget.folder.id);
           if (!isSelected) {
             boardNotifier.clearSelection();
-            boardNotifier.toggleItemSelection(folder.id);
+            boardNotifier.toggleItemSelection(widget.folder.id);
           }
         },
         child: GestureDetector(
           onTap: () {
+            if (_isEditingName) return;
             if (boardNotifier.selectedItemIds.isNotEmpty &&
                     boardNotifier.selectedItemIds.length > 1 ||
                 (boardNotifier.selectedItemIds.length == 1 && !isSelected)) {
               // boardNotifier.toggleItemSelection(folder.id);
             } else {
               // this is the only selected item
-              boardNotifier.toggleFolderOpenState(folder.id);
+              boardNotifier.toggleFolderOpenState(widget.folder.id);
             }
           },
           child: folderContent,
@@ -121,7 +245,7 @@ class FolderWidget extends ConsumerWidget {
         onWillAcceptWithDetails: (details) {
           final data = details.data;
           if (data is BoardItem) {
-            return data.id != folder.id &&
+            return data.id != widget.folder.id &&
                 data
                     is! FolderItem; // Cannot drop folder on itself or another folder
           }
@@ -131,7 +255,7 @@ class FolderWidget extends ConsumerWidget {
                 ref.read(boardNotifierProvider).valueOrNull ?? [];
             // Check if any item in selection is a folder or this folder itself
             for (String idInSelection in data) {
-              if (idInSelection == folder.id)
+              if (idInSelection == widget.folder.id)
                 return false; // Cannot drop selection containing self onto self
               final itemInSelection = currentBoardItems.firstWhere(
                 (it) => it.id == idInSelection,
@@ -148,32 +272,36 @@ class FolderWidget extends ConsumerWidget {
           final boardNotifier = ref.read(boardNotifierProvider.notifier);
           final data = details.data;
           if (data is BoardItem) {
-            boardNotifier.addItemToFolder(folder.id, data.id);
+            boardNotifier.addItemToFolder(widget.folder.id, data.id);
           } else if (data is Set<String>) {
             for (String itemIdInSelection in data) {
-              boardNotifier.addItemToFolder(folder.id, itemIdInSelection);
+              boardNotifier.addItemToFolder(
+                widget.folder.id,
+                itemIdInSelection,
+              );
             }
           }
           boardNotifier.bringToFront(
-            folder.id,
+            widget.folder.id,
           ); // Bring folder to front after adding items
         },
         builder: (context, candidateData, rejectedData) {
           bool isHoveredForDrop = candidateData.isNotEmpty;
           // This Draggable is for moving the folder itself
           return Draggable<BoardItem>(
-            data: folder,
+            data: widget.folder,
             feedback: feedbackWidget,
             childWhenDragging: childWhenDraggingWidget,
             onDragStarted: () {
-              boardNotifier.bringToFront(folder.id);
+              boardNotifier.bringToFront(widget.folder.id);
               if (!isSelected) {
                 boardNotifier.clearSelection();
-                boardNotifier.toggleItemSelection(folder.id);
+                boardNotifier.toggleItemSelection(widget.folder.id);
               }
             },
             child: GestureDetector(
               onTap: () {
+                if (_isEditingName) return;
                 if (boardNotifier.selectedItemIds.isNotEmpty &&
                         boardNotifier.selectedItemIds.length > 1 ||
                     (boardNotifier.selectedItemIds.length == 1 &&
@@ -181,7 +309,7 @@ class FolderWidget extends ConsumerWidget {
                   // boardNotifier.toggleItemSelection(folder.id);
                 } else {
                   // this is the only selected item
-                  boardNotifier.toggleFolderOpenState(folder.id);
+                  boardNotifier.toggleFolderOpenState(widget.folder.id);
                 }
               },
               child: Container(
@@ -210,8 +338,8 @@ class FolderWidget extends ConsumerWidget {
                     ),
                   ],
                 ),
-                width: folder.width,
-                height: folder.height,
+                width: widget.folder.width,
+                height: widget.folder.height,
                 padding: const EdgeInsets.all(8.0),
                 child: folderContent,
               ),
