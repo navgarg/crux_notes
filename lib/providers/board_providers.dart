@@ -53,6 +53,9 @@ class BoardNotifier extends _$BoardNotifier {
   Map<String, List<BoardItem>> get openFolderContents =>
       Map.unmodifiable(_openFolderContents);
 
+  String? _openingNoteId; // ID of the note currently being animated to open
+  String? get openingNoteId => _openingNoteId;
+
   @override
   Future<List<BoardItem>> build() async {
     _selectedItemIds.clear();
@@ -551,5 +554,17 @@ class BoardNotifier extends _$BoardNotifier {
     }
 
     clearSelection();
+  }
+
+  void setOpeningNoteId(String noteId) {
+    _openingNoteId = noteId;
+    final currentItems = List<BoardItem>.from(state.valueOrNull ?? []);
+    state = AsyncData(currentItems);
+  }
+
+  void clearOpeningNoteId() {
+    _openingNoteId = null;
+    final currentItems = List<BoardItem>.from(state.valueOrNull ?? []);
+    state = AsyncData(currentItems);
   }
 }

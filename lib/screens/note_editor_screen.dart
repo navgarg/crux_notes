@@ -57,10 +57,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     final hslDark = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
     return hslDark.toColor();
   }
+
   Color lighten(Color color, [double amount = .1]) {
     assert(amount >= 0 && amount <= 1);
     final hsl = HSLColor.fromColor(color);
-    final hslLight = hsl.withLightness((hsl.lightness + amount).clamp(0.0, 1.0));
+    final hslLight = hsl.withLightness(
+      (hsl.lightness + amount).clamp(0.0, 1.0),
+    );
     return hslLight.toColor();
   }
 
@@ -118,12 +121,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         ? Colors.black87
         : Colors.white;
 
-
     return Scaffold(
-      backgroundColor: _currentNoteColor, // Editor background matches note color
+      backgroundColor:
+          _currentNoteColor, // Editor background matches note color
       appBar: AppBar(
-        title: Text('Edit Note', style: TextStyle(color: textColor),),
-        backgroundColor: _currentNoteColor.withAlpha(220), // Slightly transparent AppBar
+        title: Text('Edit Note', style: TextStyle(color: textColor)),
+        backgroundColor: _currentNoteColor.withAlpha(
+          220,
+        ), // Slightly transparent AppBar
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.close, color: textColor),
@@ -137,23 +142,33 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 80.0),
-        child: TextField(
-          controller: _textController,
-          expands: true,
-          maxLines: null, // Allows infinite lines
-          minLines: null,
-          style: TextStyle(
-            fontSize: 18,
-            color: textColor
+      body: Hero(
+        tag: 'note_hero_${widget.noteToEdit.id}',
+        child: Material(
+          type: MaterialType
+              .transparency, // So the editor's own background shows through during transition
+          child: Container(
+            color:
+                _currentNoteColor,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 80.0),
+              child: TextField(
+                controller: _textController,
+                expands: true,
+                maxLines: null, // Allows infinite lines
+                minLines: null,
+                style: TextStyle(fontSize: 18, color: textColor),
+                decoration: InputDecoration(
+                  hintText: 'Your note...',
+                  hintStyle: TextStyle(
+                    color: textColor.withAlpha(150),
+                  ), // Hint text also adapts
+                  border: InputBorder.none,
+                ),
+                autofocus: true,
+              ),
+            ),
           ),
-          decoration: InputDecoration(
-            hintText: 'Your note...',
-            hintStyle: TextStyle(color: textColor.withAlpha(150)), // Hint text also adapts
-            border: InputBorder.none,
-          ),
-          autofocus: true,
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -161,7 +176,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         icon: Icon(Icons.save, color: fabForegroundColor),
         label: Text('Save', style: TextStyle(color: fabForegroundColor)),
         backgroundColor: fabBackgroundColor,
-        shape: StadiumBorder(side: BorderSide(color: _currentNoteColor.withAlpha(150), width: 1.5)),
+        shape: StadiumBorder(
+          side: BorderSide(color: _currentNoteColor.withAlpha(150), width: 1.5),
+        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/board_item.dart';
 import '../models/note_item.dart';
 import '../providers/board_providers.dart';
+import '../screens/note_editor_screen.dart';
 
 class NoteWidget extends ConsumerWidget {
   final NoteItem note;
@@ -87,28 +88,30 @@ class NoteWidget extends ConsumerWidget {
         behavior: HitTestBehavior.opaque,
         dragStartBehavior: DragStartBehavior.down,
         onDoubleTap: () {
-          // If there are items already selected, tapping another toggles its selection.
-          // If no items are selected, primary tap opens the editor.
           final notifier = ref.read(boardNotifierProvider.notifier);
           notifier.bringToFront(note.id);
-          if (notifier.selectedItemIds.isNotEmpty && notifier.selectedItemIds.length > 1) {
+
+          // Ensure this note becomes the sole selection
+          if (!(isSelected && currentSelectedIds.length == 1)) {
+            notifier.clearSelection();
             notifier.toggleItemSelection(note.id);
-          } else if (isSelected && notifier.selectedItemIds.length == 1) { // Only this item is selected
-            if (onPrimaryAction != null) {
-              onPrimaryAction!();
-            } else { // No primary action, but it's selected, so deselect it
-              notifier.toggleItemSelection(note.id);
-            }
-          } else if (!isSelected && notifier.selectedItemIds.isEmpty) { // No items selected
-            if (onPrimaryAction != null) {
-              onPrimaryAction!();
-            } else { // No primary action and not selected, select it
-              notifier.toggleItemSelection(note.id);
-            }
-          } else { // Some other item is selected, and this one is not: select this one
-            notifier.clearSelection(); // Clear others
-            notifier.toggleItemSelection(note.id); // Select this
           }
+
+          //  flag for animation control in BoardViewWidget
+          notifier.setOpeningNoteId(note.id);
+
+          Navigator.of(context).push(
+              PageRouteBuilder(
+                transitionDuration: const Duration(milliseconds: 800), //slower animation
+                pageBuilder: (context, animation, secondaryAnimation) => NoteEditorScreen(noteToEdit: note),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child); // fade for smoother feel with Hero
+                },
+              )
+          ).then((_) {
+            // When NoteEditorScreen is popped, clear the opening note ID
+            notifier.clearOpeningNoteId();
+          });
         },
         onTap: () {
           final notifier = ref.read(boardNotifierProvider.notifier);
@@ -116,32 +119,36 @@ class NoteWidget extends ConsumerWidget {
           notifier.toggleItemSelection(note.id);
 
         },
-        child: Container(
-          width: note.width,
-          height: note.height,
-          padding: const EdgeInsets.all(8.0),
-          decoration: BoxDecoration(
-            color: note.color,
-            borderRadius: BorderRadius.circular(8),
-            border: isSelected
-                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 4)
-                : Border.all(color: Colors.transparent, width: 2.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha((255 * 0.2).round()),
-                blurRadius: isSelected ? 6 : 4,
-                offset: const Offset(2, 2),
+        child: Hero(
+          tag: 'note_hero_${note.id}',
+          child: Container(
+            width: note.width,
+            height: note.height,
+            padding: const EdgeInsets.all(8.0),
+            decoration: BoxDecoration(
+              color: note.color,
+              borderRadius: BorderRadius.circular(8),
+              border: isSelected
+                  ? Border.all(color: Theme.of(context).colorScheme.primary, width: 4)
+                  : Border.all(color: Colors.transparent, width: 2.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha((255 * 0.2).round()),
+                  blurRadius: isSelected ? 6 : 4,
+                  offset: const Offset(2, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              note.content,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 18,
+                color: note.color.computeLuminance() > 0.5
+                    ? Colors.black
+                    : Colors.white,
               ),
-            ],
-          ),
-          child: Text(
-            note.content,
-            maxLines: 5,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: note.color.computeLuminance() > 0.5
-                  ? Colors.black
-                  : Colors.white,
             ),
           ),
         ),
