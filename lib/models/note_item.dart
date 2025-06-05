@@ -51,4 +51,29 @@ class NoteItem extends BoardItem {
       zIndex: json['zIndex'] as int? ?? 0,
     );
   }
+  NoteItem copyWith({
+    String? id,
+    double? x,
+    double? y,
+    double? width,
+    double? height,
+    int? zIndex,
+    String? content,
+    Color? color,
+    Timestamp? createdAt,
+    Timestamp? updatedAt,
+  }) {
+    return NoteItem(
+      id: id ?? this.id,
+      x: x ?? this.x,
+      y: y ?? this.y,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      zIndex: zIndex ?? this.zIndex,
+      content: content ?? this.content,
+      color: color ?? this.color,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }

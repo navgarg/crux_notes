@@ -23,6 +23,9 @@ class ResizeHandleWidget extends ConsumerStatefulWidget {
     required this.corner,
   });
 
+  static double get visualHandleSize => _visualHandleSize;
+  static double get interactiveHandleAreaSize => _interactiveHandleAreaSize;
+
   @override
   ConsumerState<ResizeHandleWidget> createState() => _ResizeHandleWidgetState();
 }

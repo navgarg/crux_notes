@@ -58,32 +58,29 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
 
     if (_isDraggingOverFabForFolderCreation && isAnythingSelected) {
       // State: Dragging selected items over/near FAB to create folder
-      fabBackgroundColor =
-          Colors.green.shade300; // A distinct "drop target" color
-      fabForegroundColor = Colors.black87; // Ensure contrast
+      fabBackgroundColor = Colors.green.shade300;
+      fabForegroundColor = Colors.black87;
       fabIconWidget = const Icon(Icons.create_new_folder_outlined);
       fabLabel = "Create Folder";
-      fabAction = null; // Action is on drop (onAcceptWithDetails)
+      fabAction = null;
     } else if (isAnythingSelected) {
       // State: Items are selected, FAB offers to clear selection
       fabBackgroundColor =
-          currentColorScheme.secondaryContainer; // Use a theme color
+          currentColorScheme.secondaryContainer;
       fabForegroundColor = currentColorScheme
-          .onSecondaryContainer; // Contrasting text/icon color
-      fabIconWidget = const Icon(Icons.deselect_outlined); // Changed icon
+          .onSecondaryContainer;
+      fabIconWidget = const Icon(Icons.deselect_outlined);
       fabLabel = "Clear (${selectedItemIds.length})";
       fabAction = () {
         ref.read(boardNotifierProvider.notifier).clearSelection();
       };
     } else {
-      // State: Normal "New" item creation
       fabBackgroundColor =
-          currentColorScheme.primaryContainer; // Use a theme color
+          currentColorScheme.primaryContainer;
       fabForegroundColor =
-          currentColorScheme.onPrimaryContainer; // Contrasting text/icon color
+          currentColorScheme.onPrimaryContainer;
       fabIconWidget = const Icon(Icons.add);
       fabLabel = "New";
-      // fabAction is already set to _showCreateItemDialog
     }
 
     return Scaffold(
@@ -160,84 +157,119 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
           ? SizedBox(
               width: 150 + 100,
               height: 56 + 80,
-              // color: Colors.transparent,
-              // alignment: Alignment.bottomRight,
-              child: DragTarget<BoardItem>(
-                // FAB is also a DragTarget
+              child: DragTarget<Object>(
                 onWillAcceptWithDetails: (details) {
-                  // Accept if items are selected and the dragged item is part of selection
-                  bool accept =
-                      isAnythingSelected &&
-                      selectedItemIds.contains(details.data.id);
+                  final data = details.data;
+                  bool accept = false;
+                  if (data is Set<String> && data.length > 1) {
+                    final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
+                    if (currentlySelectedIdsFromNotifier.length == data.length &&
+                        currentlySelectedIdsFromNotifier.every((id) => data.contains(id))) {
+                      accept = true;
+                    }
+                  }
                   if (accept != _isDraggingOverFabForFolderCreation) {
-                    setState(() {
-                      _isDraggingOverFabForFolderCreation = accept;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        setState(() => _isDraggingOverFabForFolderCreation = accept);
+                      }
                     });
                   }
                   return accept;
                 },
+
                 onMove: (details) {
-                  final bool currentDraggableIsSelected = selectedItemIds
-                      .contains(details.data.id);
-                  if (isAnythingSelected &&
-                      currentDraggableIsSelected &&
-                      !_isDraggingOverFabForFolderCreation) {
-                    setState(() {
-                      _isDraggingOverFabForFolderCreation = true;
+                  final data = details.data;
+                  bool shouldBeHovering = false;
+                  if (data is Set<String> && data.length>1) {
+                    final currentBoardItemsValue =
+                        ref.read(boardNotifierProvider).valueOrNull ?? [];
+                    bool containsFolder = data.any(
+                      (id) => currentBoardItemsValue.any(
+                        (bi) => bi.id == id && bi is FolderItem,
+                      ),
+                    );
+                    final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
+                    if (currentlySelectedIdsFromNotifier.length == data.length &&
+                        currentlySelectedIdsFromNotifier.every((id) => data.contains(id)) && !containsFolder) {
+                      shouldBeHovering = true;
+                    }
+                  }
+                  if (shouldBeHovering != _isDraggingOverFabForFolderCreation) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted)
+                        setState(
+                          () => _isDraggingOverFabForFolderCreation =
+                              shouldBeHovering,
+                        );
                     });
                   }
                 },
                 onLeave: (data) {
-                  // When item is dragged away from FAB
                   if (_isDraggingOverFabForFolderCreation) {
-                    setState(() {
-                      _isDraggingOverFabForFolderCreation = false;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted)
+                        setState(
+                          () => _isDraggingOverFabForFolderCreation = false,
+                        );
                     });
                   }
                 },
                 onAcceptWithDetails: (details) async {
-                  setState(() {
-                    _isDraggingOverFabForFolderCreation =
-                        false; // Reset on drop
+                  final data = details.data;
+                  if (data is Set<String> && data.length > 1) {
+                    final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
+                    if (currentlySelectedIdsFromNotifier.length == data.length &&
+                        currentlySelectedIdsFromNotifier.every((id) => data.contains(id))) {
+                      ref.read(boardNotifierProvider.notifier).createFolderFromSelection("New Group");
+                    }
+                  }
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      setState(() => _isDraggingOverFabForFolderCreation = false);
+                    }
                   });
-                  await ref
-                      .read(boardNotifierProvider.notifier)
-                      .createFolderFromSelection("New Group");
                 },
-                builder: (context, candidateFabDropData, rejectedFabDropData) {
-                  return Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        color: Colors.transparent,
-                      ),
-                      FloatingActionButton.extended(
-                        onPressed: fabAction,
-                        label: Text(
-                          fabLabel,
-                          style: TextStyle(color: fabForegroundColor),
-                        ),
-                        icon: fabIconWidget,
-                        backgroundColor: fabBackgroundColor,
-                        // To make it more obvious it's a drop target when _isDraggingOverFabForFolderCreation:
-                        elevation: _isDraggingOverFabForFolderCreation
-                            ? 12.0
-                            : 6.0,
-                        shape: _isDraggingOverFabForFolderCreation
-                            ? RoundedRectangleBorder(
-                                side: BorderSide(
-                                  color: Colors.green.shade700,
-                                  width: 2.0,
-                                ),
-                                borderRadius: BorderRadius.circular(28.0),
-                              )
-                            : null, // Default shape
-                      ),
-                    ],
-                  );
-                },
+                builder:
+                    (
+                      BuildContext context,
+                      List<Object?> candidateData,
+                      List<dynamic> rejectedData,
+                    ) {
+
+                      // builder: (context, candidateFabDropData, rejectedFabDropData) {
+                      return Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            color: Colors.transparent,
+                          ),
+                          FloatingActionButton.extended(
+                            onPressed: fabAction,
+                            label: Text(
+                              fabLabel,
+                              style: TextStyle(color: fabForegroundColor),
+                            ),
+                            icon: fabIconWidget,
+                            backgroundColor: fabBackgroundColor,
+                            elevation: _isDraggingOverFabForFolderCreation
+                                ? 12.0
+                                : 6.0,
+                            shape: _isDraggingOverFabForFolderCreation
+                                ? RoundedRectangleBorder(
+                                    side: BorderSide(
+                                      color: Colors.green.shade700,
+                                      width: 2.0,
+                                    ),
+                                    borderRadius: BorderRadius.circular(28.0),
+                                  )
+                                : null, // Default shape
+                          ),
+                        ],
+                      );
+                    },
               ),
             )
           : null,

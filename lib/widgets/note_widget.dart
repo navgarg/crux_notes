@@ -61,8 +61,10 @@ class NoteWidget extends ConsumerWidget {
       ),
     );
 
-    return Draggable<BoardItem>(
-      data: note,
+    return Draggable<Object>(
+      data: (currentSelectedIds.length > 1 && isSelected)
+          ? currentSelectedIds // If multiple items are selected and this is one of them, drag the whole group
+          : note,
       feedback: feedbackWidget, // Widget shown under the finger while dragging
       childWhenDragging:
           childWhenDraggingWidget, // Widget left behind at original spot

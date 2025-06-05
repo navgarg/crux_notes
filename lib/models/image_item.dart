@@ -46,4 +46,26 @@ class ImageItem extends BoardItem {
       zIndex: json['zIndex'] as int? ?? 0,
     );
   }
+
+  ImageItem copyWith({
+    String? id,
+    double? x,
+    double? y,
+    double? width,
+    double? height,
+    int? zIndex,
+    String? imageUrl,
+    Timestamp? updatedAt,
+  }) {
+    return ImageItem(
+      id: id ?? this.id,
+      x: x ?? this.x,
+      y: y ?? this.y,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      zIndex: zIndex ?? this.zIndex,
+      updatedAt: updatedAt ?? this.updatedAt,
+      imageUrl: imageUrl ?? this.imageUrl,
+    );
+  }
 }

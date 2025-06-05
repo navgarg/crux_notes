@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/board_item.dart';
 import '../../models/folder_item.dart';
+import '../../models/note_item.dart';
 import '../../providers/board_providers.dart';
 
 class FolderWidget extends ConsumerWidget {
@@ -37,7 +38,11 @@ class FolderWidget extends ConsumerWidget {
     final folderContent = Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(isOpen ? Icons.folder_open : Icons.folder, size: 40, color: Colors.brown.shade700),
+        Icon(
+          isOpen ? Icons.folder_open : Icons.folder,
+          size: 40,
+          color: Colors.brown.shade700,
+        ),
         const SizedBox(height: 8),
         Text(
           folder.name,
@@ -81,55 +86,139 @@ class FolderWidget extends ConsumerWidget {
       ),
     );
 
-    return Draggable<BoardItem>(
-      data: folder,
-      feedback: feedbackWidget,
-      childWhenDragging: childWhenDraggingWidget,
-      onDragStarted: () {
-        boardNotifier.bringToFront(folder.id);
-        if (!isSelected) {
-          boardNotifier.clearSelection();
-          boardNotifier.toggleItemSelection(folder.id);
-        }
-      },
-      child: GestureDetector(
-        onTap: () {
-          if (boardNotifier.selectedItemIds.isNotEmpty && boardNotifier.selectedItemIds.length >1 || (boardNotifier.selectedItemIds.length == 1 && !isSelected)) {
+    if (isOpen) {
+      // If folder is open, it's not a drop target itself (bounding box is)
+      return Draggable<BoardItem>(
+        data: folder,
+        feedback: feedbackWidget,
+        childWhenDragging:
+            childWhenDraggingWidget,
+        onDragStarted: () {
+          boardNotifier.bringToFront(folder.id);
+          if (!isSelected) {
+            boardNotifier.clearSelection();
             boardNotifier.toggleItemSelection(folder.id);
-          } else { // this is the only selected item
-            boardNotifier.toggleFolderOpenState(folder.id);
           }
         },
-        onLongPress: () {
-          final notifier = ref.read(boardNotifierProvider.notifier);
-          // notifier.bringToFront(folder.id);
-          notifier.toggleItemSelection(folder.id);
-        },
-        child: Container(
-          width: folder.width,
-          height: folder.height,
-          padding: const EdgeInsets.all(8.0),
-          decoration: BoxDecoration(
-            color: isOpen ? Colors.brown.shade400 : Colors.brown.shade300,
-            borderRadius: BorderRadius.circular(8),
-            border:
-                isSelected // Conditional border
-                ? Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 3,
-                  )
-                : Border.all(color: Colors.transparent, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(isSelected ? 70 : 50),
-                blurRadius: isSelected ? 6 : 4,
-                offset: const Offset(2, 2),
-              ),
-            ],
-          ),
+        child: GestureDetector(
+          onTap: () {
+            if (boardNotifier.selectedItemIds.isNotEmpty &&
+                    boardNotifier.selectedItemIds.length > 1 ||
+                (boardNotifier.selectedItemIds.length == 1 && !isSelected)) {
+              // boardNotifier.toggleItemSelection(folder.id);
+            } else {
+              // this is the only selected item
+              boardNotifier.toggleFolderOpenState(folder.id);
+            }
+          },
           child: folderContent,
         ),
-      ),
-    );
+      );
+    } else {
+      // If folder is closed, make it a DragTarget
+      return DragTarget<Object>(
+        // Accept BoardItem or Set<String>
+        onWillAcceptWithDetails: (details) {
+          final data = details.data;
+          if (data is BoardItem) {
+            return data.id != folder.id &&
+                data
+                    is! FolderItem; // Cannot drop folder on itself or another folder
+          }
+          if (data is Set<String>) {
+            // Dropping a selection
+            final currentBoardItems =
+                ref.read(boardNotifierProvider).valueOrNull ?? [];
+            // Check if any item in selection is a folder or this folder itself
+            for (String idInSelection in data) {
+              if (idInSelection == folder.id)
+                return false; // Cannot drop selection containing self onto self
+              final itemInSelection = currentBoardItems.firstWhere(
+                (it) => it.id == idInSelection,
+                orElse: () => NoteItem(id: 'temp', x: 0, y: 0, zIndex: 0),
+              ); // temp to avoid null
+              if (itemInSelection is FolderItem)
+                return false; // Selection cannot contain folders
+            }
+            return data.isNotEmpty;
+          }
+          return false;
+        },
+        onAcceptWithDetails: (details) {
+          final boardNotifier = ref.read(boardNotifierProvider.notifier);
+          final data = details.data;
+          if (data is BoardItem) {
+            boardNotifier.addItemToFolder(folder.id, data.id);
+          } else if (data is Set<String>) {
+            for (String itemIdInSelection in data) {
+              boardNotifier.addItemToFolder(folder.id, itemIdInSelection);
+            }
+          }
+          boardNotifier.bringToFront(
+            folder.id,
+          ); // Bring folder to front after adding items
+        },
+        builder: (context, candidateData, rejectedData) {
+          bool isHoveredForDrop = candidateData.isNotEmpty;
+          // This Draggable is for moving the folder itself
+          return Draggable<BoardItem>(
+            data: folder,
+            feedback: feedbackWidget,
+            childWhenDragging: childWhenDraggingWidget,
+            onDragStarted: () {
+              boardNotifier.bringToFront(folder.id);
+              if (!isSelected) {
+                boardNotifier.clearSelection();
+                boardNotifier.toggleItemSelection(folder.id);
+              }
+            },
+            child: GestureDetector(
+              onTap: () {
+                if (boardNotifier.selectedItemIds.isNotEmpty &&
+                        boardNotifier.selectedItemIds.length > 1 ||
+                    (boardNotifier.selectedItemIds.length == 1 &&
+                        !isSelected)) {
+                  // boardNotifier.toggleItemSelection(folder.id);
+                } else {
+                  // this is the only selected item
+                  boardNotifier.toggleFolderOpenState(folder.id);
+                }
+              },
+              child: Container(
+                // Add highlight when hovered for drop
+                decoration: BoxDecoration(
+                  // Combine existing decoration with hover effect
+                  color: isHoveredForDrop
+                      ? Colors.brown.shade200
+                      : (isOpen
+                            ? Colors.brown.shade400
+                            : Colors.brown.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                  border: isSelected || isHoveredForDrop
+                      ? Border.all(
+                          color: isHoveredForDrop
+                              ? Colors.green
+                              : Theme.of(context).colorScheme.primary,
+                          width: 3,
+                        )
+                      : Border.all(color: Colors.transparent, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(isSelected ? 70 : 50),
+                      blurRadius: isSelected ? 6 : 4,
+                      offset: const Offset(2, 2),
+                    ),
+                  ],
+                ),
+                width: folder.width,
+                height: folder.height,
+                padding: const EdgeInsets.all(8.0),
+                child: folderContent,
+              ),
+            ),
+          );
+        },
+      );
+    }
   }
 }

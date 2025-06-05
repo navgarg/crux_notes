@@ -136,19 +136,97 @@ class BoardViewWidget extends ConsumerWidget {
     });
     finalRenderList.addAll(itemWidgetsToRender);
 
-    return DragTarget<BoardItem>(
+    return DragTarget<Object>(
       onWillAcceptWithDetails: (details) => true,
       onAcceptWithDetails: (details) {
-        final BoardItem droppedItem = details.data;
-        final RenderBox renderBox = context.findRenderObject() as RenderBox;
-        final Offset localOffset = renderBox.globalToLocal(details.offset);
+      //   final BoardItem droppedItem = details.data;
+      //   final RenderBox renderBox = context.findRenderObject() as RenderBox;
+      //   final Offset localOffset = renderBox.globalToLocal(details.offset);
+      //   final boardNotifier = ref.read(boardNotifierProvider.notifier);
+      //   boardNotifier.updateItemGeometricProperties(
+      //     droppedItem.id,
+      //     newX: localOffset.dx,
+      //     newY: localOffset.dy,
+      //   );
+      //   boardNotifier.bringToFront(droppedItem.id);
+      // },
         final boardNotifier = ref.read(boardNotifierProvider.notifier);
-        boardNotifier.updateItemGeometricProperties(
-          droppedItem.id,
-          newX: localOffset.dx,
-          newY: localOffset.dy,
-        );
-        boardNotifier.bringToFront(droppedItem.id);
+        final RenderBox renderBox = context.findRenderObject() as RenderBox;
+        final Offset localDropOffset = renderBox.globalToLocal(details.offset);
+
+        final List<BoardItem> currentBoardStateItems = ref.read(boardNotifierProvider).valueOrNull ?? [];
+        final Set<String> currentlyOpenFolderIds = ref.read(boardNotifierProvider.notifier).openFolderIds;
+
+        if (details.data is BoardItem) {
+          final droppedItem = details.data as BoardItem;
+          if (droppedItem is FolderItem) { // Prevent dragging folders into open folders or onto board in a way that changes their structure
+            print("Folder dropped, updating its position.");
+            boardNotifier.updateItemGeometricProperties(droppedItem.id, newX: localDropOffset.dx, newY: localDropOffset.dy);
+            boardNotifier.bringToFront(droppedItem.id);
+            return;
+          }
+
+          String? sourceFolderId; // Folder the item was dragged FROM (if it was in an open one)
+          for (final openFolderId in currentlyOpenFolderIds) {
+            final folder = currentBoardStateItems.firstWhere((item) => item.id == openFolderId) as FolderItem;
+            if (folder.itemIds.contains(droppedItem.id)) {
+              sourceFolderId = openFolderId;
+              break;
+            }
+          }
+
+          String? targetOpenFolderId; // Open folder the item is dropped INTO
+          for (final entry in openFolderBoundingBoxes.entries) {
+            // Ensure the folder itself is not the dropped item, prevent dropping item into its own visual representation's bbox
+            if (entry.key != droppedItem.id && entry.value.contains(localDropOffset)) {
+              targetOpenFolderId = entry.key;
+              break;
+            }
+          }
+
+          print("Dropped: ${droppedItem.id}, Source: $sourceFolderId, Target Open: $targetOpenFolderId, Offset: $localDropOffset");
+
+          if (sourceFolderId != null) { // Item was dragged from an open folder
+            if (targetOpenFolderId != null) { // And dropped into an open folder's bounding box
+              if (sourceFolderId == targetOpenFolderId) {
+                print("Item ${droppedItem.id} moved within same folder ${sourceFolderId}. No change in membership.");
+              } else {
+                // Moved from sourceFolderId to targetOpenFolderId
+                print("Item ${droppedItem.id} moved from open folder $sourceFolderId to open folder $targetOpenFolderId");
+                boardNotifier.addItemToFolder(targetOpenFolderId, droppedItem.id);
+              }
+            } else {
+              // Dragged out of sourceFolderId onto the main board
+              print("Item ${droppedItem.id} dragged out of open folder $sourceFolderId to board.");
+              boardNotifier.removeItemFromFolder(
+                sourceFolderId,
+                droppedItem.id,
+                newX: localDropOffset.dx,
+                newY: localDropOffset.dy,
+              );
+            }
+          } else {
+            if (targetOpenFolderId != null) {
+              // Dragged from board into an open folder's bounding box
+              print("Item ${droppedItem.id} dragged from board into open folder $targetOpenFolderId.");
+              boardNotifier.addItemToFolder(targetOpenFolderId, droppedItem.id);
+            } else {
+              // Item dragged on the board itself (not from/to an open folder)
+              print("Item ${droppedItem.id} dragged on the board.");
+              boardNotifier.updateItemGeometricProperties(
+                droppedItem.id,
+                newX: localDropOffset.dx,
+                newY: localDropOffset.dy,
+              );
+            }
+          }
+          boardNotifier.bringToFront(targetOpenFolderId ?? droppedItem.id);
+
+        } else if (details.data is Set<String>) {
+
+          final Set<String> selectedIds = details.data as Set<String>;
+          print("Group of items $selectedIds dropped on board. Individual Draggables should manage group move.");
+        }
       },
       builder: (context, candidateData, rejectedData) {
         return Stack(children: finalRenderList);
