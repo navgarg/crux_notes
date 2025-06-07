@@ -1,3 +1,4 @@
+import 'package:crux_notes/providers/theme_provider.dart';
 import 'package:crux_notes/services/auth_gate.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ class MyApp extends ConsumerWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeMode currentThemeMode = ref.watch(themeNotifierProvider);
     return MaterialApp(
       title: 'Notes',
       theme: ThemeData(
@@ -31,9 +33,9 @@ class MyApp extends ConsumerWidget {
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        // Define dark theme colors if needed
       ),
-      themeMode: ThemeMode.system, // Or allow user to choose
+      themeMode: currentThemeMode,
+      debugShowCheckedModeBanner: false,
       home: const AuthGate(), // Entry point will check auth state
       // home: BoardScreen(),
     );

@@ -13,6 +13,7 @@ import '../models/image_item.dart';
 import '../models/note_item.dart';
 import '../providers/auth_providers.dart';
 import '../providers/board_providers.dart' hide firebaseAuthProvider;
+import '../providers/theme_provider.dart';
 import '../widgets/board_view_widget.dart';
 import '../widgets/folders/folder_widget.dart';
 import '../widgets/images/image_widget.dart';
@@ -32,6 +33,9 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
   //todo: make a prettier app bar. check spacing for logout button; add button to switch theme (or make profile)
   @override
   Widget build(BuildContext context) {
+    final ThemeMode currentThemeMode = ref.watch(themeNotifierProvider); // Watch the theme mode
+    final themeNotifier = ref.read(themeNotifierProvider.notifier);
+
     final User? currentUser = ref.watch(currentUserProvider);
     final AsyncValue<List<BoardItem>> asyncBoardItems = ref.watch(
       boardNotifierProvider,
@@ -83,6 +87,16 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
       fabLabel = "New";
     }
 
+    List<bool> isSelected = [false, false];
+    final Brightness platformBrightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+
+    if (currentThemeMode == ThemeMode.light || (currentThemeMode == ThemeMode.system && platformBrightness == Brightness.light)) {
+      isSelected = [true, false]; // Light mode is active
+    } else { // Dark mode is active
+      isSelected = [false, true];
+    }
+
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -91,6 +105,38 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
               : 'Board',
         ),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ToggleButtons(
+              isSelected: isSelected,
+              onPressed: (int index) {
+                if (index == 0) { // Light mode selected
+                  themeNotifier.setThemeMode(ThemeMode.light);
+                } else { // Dark mode selected
+                  themeNotifier.setThemeMode(ThemeMode.dark);
+                }
+              },
+              // Styling for the buttons
+              borderRadius: BorderRadius.circular(20.0),
+              selectedBorderColor: Theme.of(context).colorScheme.primary,
+              selectedColor: Theme.of(context).colorScheme.onPrimary, // Color of icon when selected
+              fillColor: Theme.of(context).colorScheme.primary.withAlpha((255*0.8).round()), // Background when selected
+              color: Theme.of(context).colorScheme.onSurface.withAlpha((255*0.7).round()), // Color of icon when not selected
+              splashColor: Theme.of(context).colorScheme.primary.withAlpha((255*0.12).round()),
+              hoverColor: Theme.of(context).colorScheme.primary.withAlpha((255*0.04).round()),
+              constraints: const BoxConstraints(minHeight: 24.0, minWidth: 36.0),
+              children: const <Widget>[
+                Tooltip(
+                  message: 'Light Theme',
+                  child: Icon(Icons.light_mode_outlined, size: 20),
+                ),
+                Tooltip(
+                  message: 'Dark Theme',
+                  child: Icon(Icons.dark_mode_outlined, size: 20),
+                ),
+              ],
+            ),
+          ),
           if (currentUser != null)
             IconButton(
               icon: const Icon(Icons.logout),
