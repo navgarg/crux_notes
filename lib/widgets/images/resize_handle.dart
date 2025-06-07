@@ -50,14 +50,8 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
         iconData = Icons.south_east;
         break;
     }
-    final double positionOffset = -_interactiveHandleAreaSize / 2;
-
-    // return Positioned(
-        // left: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.bottomLeft) ? positionOffset : null,
-        // top: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.topRight) ? positionOffset : null,
-        // right: (widget.corner == ResizeCorner.topRight || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
-        // bottom: (widget.corner == ResizeCorner.bottomLeft || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
-      return MouseRegion(
+   return MouseRegion(
+     cursor: SystemMouseCursors.resizeUpLeftDownRight,
         onEnter: (_) {
           // print("Enter ${widget.corner}");
           if (!_isHandleHovering) setState(() => _isHandleHovering = true);
@@ -70,9 +64,9 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
           behavior: HitTestBehavior.opaque,
           dragStartBehavior: DragStartBehavior.down,
           onPanStart: (details) {
-            ref
-                .read(boardNotifierProvider.notifier)
-                .bringToFront(widget.imageItem.id);
+            final boardNotifier = ref.read(boardNotifierProvider.notifier);
+            boardNotifier.bringToFront(widget.imageItem.id);
+            boardNotifier.startResizingItem(widget.imageItem.id);
           },
           onPanUpdate: (details) {
             double currentX = widget.imageItem.x;
@@ -136,7 +130,7 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
             }
 
             final boardNotifier = ref.read(boardNotifierProvider.notifier);
-            boardNotifier.updateItemGeometricProperties(
+            boardNotifier.updateItemGeometricPropertiesLocally(
               widget.imageItem.id,
               newX: (newX != currentX) ? newX : null,
               newY: (newY != currentY) ? newY : null,
@@ -145,9 +139,9 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
             );
           },
           onPanEnd: (details) {
-            print(
-              'Image resize pan ended for ${widget.imageItem.id} from ${widget.corner}',
-            );
+            final boardNotifier = ref.read(boardNotifierProvider.notifier);
+            boardNotifier.stopResizingItem(widget.imageItem.id);
+            boardNotifier.persistItemGeometry(widget.imageItem.id);
           },
             child: Container(
               width: _interactiveHandleAreaSize,

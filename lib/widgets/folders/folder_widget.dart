@@ -225,6 +225,10 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
         },
         child: GestureDetector(
           onTap: () {
+            const snackBar = SnackBar(content: Text('Cannot select a folder when open'));
+            ScaffoldMessenger.of(context).showSnackBar(snackBar);
+          },
+          onDoubleTap: () {
             if (_isEditingName) return;
             if (boardNotifier.selectedItemIds.isNotEmpty &&
                     boardNotifier.selectedItemIds.length > 1 ||
@@ -233,11 +237,6 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
             } else {
               // this is the only selected item
               boardNotifier.toggleFolderOpenState(widget.folder.id);
-            }
-            if (boardNotifier.selectedItemIds.isNotEmpty &&
-                boardNotifier.selectedItemIds.length > 1){
-              const snackBar = SnackBar(content: Text('Cannot select a folder item'));
-              ScaffoldMessenger.of(context).showSnackBar(snackBar);
             }
           },
           child: folderContent,
@@ -306,15 +305,23 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
             },
             child: GestureDetector(
               onTap: () {
+                final notifier = ref.read(boardNotifierProvider.notifier);
+                notifier.toggleItemSelection(widget.folder.id);
+                print("folder tapped. selection toggled");
+              },
+              onDoubleTap: () {
                 if (_isEditingName) return;
                 if (boardNotifier.selectedItemIds.isNotEmpty &&
-                        boardNotifier.selectedItemIds.length > 1 ||
-                    (boardNotifier.selectedItemIds.length == 1 &&
-                        !isSelected)) {
+                    boardNotifier.selectedItemIds.length > 1 ||
+                    (boardNotifier.selectedItemIds.length == 1 && !isSelected)) {
                   // boardNotifier.toggleItemSelection(folder.id);
                 } else {
                   // this is the only selected item
                   boardNotifier.toggleFolderOpenState(widget.folder.id);
+                }
+                if (boardNotifier.selectedItemIds.isNotEmpty){
+                  const snackBar = SnackBar(content: Text('Cannot select a folder item'));
+                  ScaffoldMessenger.of(context).showSnackBar(snackBar);
                 }
               },
               child: Container(

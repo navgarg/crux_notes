@@ -48,6 +48,10 @@ class BoardViewWidget extends ConsumerWidget {
       ),
     );
 
+    final String? activelyResizingIdFromNotifier = ref.watch(
+        boardNotifierProvider.select((s) => notifier.activelyResizingItemId)
+    );
+
     // Fetch the actual opening note item to get its position, if any
     NoteItem? openingNoteInstance;
     if (currentlyOpeningNoteId != null) {
@@ -99,8 +103,8 @@ class BoardViewWidget extends ConsumerWidget {
     }
 
     for (final BoardItem item in allSortedItems) {
-      // Iterate through ALL items to find folders first
-      if (item is FolderItem) {
+      // Iterate through ALL items to find OPEN folders first
+      if (item is FolderItem && openFolderIds.contains(item.id)) {
         final folder = item;
         final bool isThisFolderActuallyOpen = openFolderIds.contains(folder.id);
 
@@ -166,9 +170,6 @@ class BoardViewWidget extends ConsumerWidget {
             // Add to renderedAsFolderContentIds so they are not rendered again by the top-level loop
             renderedAsFolderContentIds.add(contentItem.id);
 
-            print(
-              "Content ID: ${contentItem.id}, layoutOffset: $layoutOffset, contentItem.width: ${contentItem.width}, contentItem.height: ${contentItem.height}",
-            );
 
             Widget currentContentWidget;
             if (contentItem is NoteItem) {
@@ -206,9 +207,6 @@ class BoardViewWidget extends ConsumerWidget {
             Curve finalItemAnimationCurve = Curves.easeInOut;
             double finalItemOpacity;
 
-            print(
-              "Processing Content: Folder ${folder.id}, Item ${contentItem.id}, isThisFolderActuallyOpen: $isThisFolderActuallyOpen, externalNoteOpening: $currentlyOpeningNoteId",
-            );
 
             if (currentlyOpeningNoteId != null &&
                 contentItem.id != currentlyOpeningNoteId &&
@@ -230,9 +228,6 @@ class BoardViewWidget extends ConsumerWidget {
               );
               finalContentAnimationDuration = noteOpenAnimationDuration;
               finalItemOpacity = 1.0;
-              print(
-                "Content ${contentItem.id}: External Note, Target AWAY: $finalContentTargetPosition",
-              );
             } else {
               // No external note interference, animate based on this folder's state
               if (isThisFolderActuallyOpen) {
@@ -242,9 +237,6 @@ class BoardViewWidget extends ConsumerWidget {
                 );
                 finalItemAnimationCurve = Curves.easeOutCubic;
                 finalItemOpacity = 1.0;
-                print(
-                  "Content ${contentItem.id}: Folder OPEN, Target LAYOUT: $finalContentTargetPosition",
-                );
               } else {
                 // Folder is closed
                 finalContentTargetPosition = itemInitialPositionWithinFolder;
@@ -253,9 +245,6 @@ class BoardViewWidget extends ConsumerWidget {
                 );
                 finalItemAnimationCurve = Curves.easeInCubic;
                 finalItemOpacity = 0.0;
-                print(
-                  "Content ${contentItem.id}: Folder CLOSED, Target INITIAL: $finalContentTargetPosition",
-                );
               }
             }
 
@@ -295,11 +284,9 @@ class BoardViewWidget extends ConsumerWidget {
               currentFolderMaxX + padding,
               currentFolderMaxY + padding,
             );
-            print("BOUNDING BOX for POPULATED ${folder.id}: ${openFolderBoundingBoxes[folder.id]} (minX:$currentFolderMinX, minY:$currentFolderMinY, maxX:$currentFolderMaxX, maxY:$currentFolderMaxY)");
 
           } else { // Folder is NOT open
           openFolderBoundingBoxes.remove(folder.id);
-          print("BOUNDING BOX for ${folder.id} REMOVED (folder not open)");
         }
 
       } else { // Folder's `contents` list is empty from the start
@@ -311,16 +298,17 @@ class BoardViewWidget extends ConsumerWidget {
             folderIconTargetPosition.dx + folder.width + emptyFolderPadding,
             folderIconTargetPosition.dy + folder.height + emptyFolderPadding,
           );
-          print("BOUNDING BOX for INITIALLY_EMPTY_AND_OPEN ${folder.id} (around icon): ${openFolderBoundingBoxes[folder.id]}");
         } else {
           openFolderBoundingBoxes.remove(folder.id);
-          print("BOUNDING BOX for ${folder.id} REMOVED (initially empty and not open)");
         }
       }
     }
   }
 
     // Top-level items
+
+    final Map<String, Rect> currentOpenFolderContentRects = Map.from(openFolderBoundingBoxes);
+
     for (final BoardItem item in allSortedItems) {
       if (item is FolderItem && openFolderIds.contains(item.id)) {
         continue;
@@ -331,6 +319,99 @@ class BoardViewWidget extends ConsumerWidget {
       }
       if (renderedAsFolderContentIds.contains(item.id)) {
         continue;
+      }
+
+      // Its default target position is its stored x, y.
+      Offset finalItemTargetPosition = Offset(item.x, item.y);
+      Duration itemAnimationDuration;
+      bool isEvadingThisBuild = false;
+      double itemMarginHorizontal = 24.0;
+      Curve itemAnimationCurve = Curves.easeInOut; // Default
+
+
+      if (item is ImageItem && activelyResizingIdFromNotifier == item.id) {
+        itemAnimationDuration = Duration.zero;
+      }
+      else if (justManipulatedIdFromNotifier == item.id) {
+        itemAnimationDuration = itemDragSnapDuration;
+        finalItemTargetPosition = Offset(item.x, item.y); // Use the raw updated x,y from model
+    } else if (currentlyOpeningNoteId != null &&
+          item.id != currentlyOpeningNoteId &&
+          openingNoteInstance != null) {
+        finalItemTargetPosition = calculateAwayPosition(
+          item,
+          openingNoteInstance,
+          context,
+        );
+        itemAnimationDuration = noteOpenAnimationDuration;
+      } else if (currentlyOpeningNoteId == null) {
+
+        itemAnimationDuration = noteCloseAnimationDuration;
+        // Check if this item needs to evade any open folder's content area.
+        // Do not apply evasion if the item itself is an open folder icon that's already being positioned.
+        Rect itemRect = Rect.fromLTWH(item.x, item.y, item.width, item.height); // Its current resting place
+        Offset potentialEvasionPosition = Offset(item.x, item.y); // Start with no evasion
+
+        print("Item ${item.id} rect: $itemRect");
+
+        for (final MapEntry<String, Rect> folderEntry in currentOpenFolderContentRects.entries) {
+          // Don't evade if 'item' IS the folder icon whose content area this is
+          if (item.id == folderEntry.key && item is FolderItem) {
+            continue; //dont evade itself
+          }
+
+          final Rect folderContentArea = folderEntry.value; // This is already padded
+
+          print("  Checking overlap with folder ${folderEntry.key} content area: $folderContentArea");
+          Rect itemRectForCheck = Rect.fromLTWH(potentialEvasionPosition.dx, potentialEvasionPosition.dy, item.width, item.height).inflate(70.0);
+          Rect folderContentAreaForCheck = folderContentArea.inflate(70.0);
+
+          if (itemRectForCheck.overlaps(folderContentAreaForCheck)) {
+            print("    OVERLAP DETECTED!");
+            isEvadingThisBuild = true;
+            double evasionX = potentialEvasionPosition.dx; // Start with current target
+            double evasionY = potentialEvasionPosition.dy; // Start with current target
+
+            Rect itemCurrentRect = Rect.fromLTWH(potentialEvasionPosition.dx, potentialEvasionPosition.dy, item.width, item.height);
+            Rect actualFolderContentRect = folderEntry.value;
+
+            double itemCenterToCompare = potentialEvasionPosition.dx + item.width / 2;
+
+            bool pushRight = (
+                itemCurrentRect.left < actualFolderContentRect.right &&
+                    itemCurrentRect.center.dx > actualFolderContentRect.center.dx &&
+                    itemCurrentRect.bottom > actualFolderContentRect.top &&
+                    itemCurrentRect.top < actualFolderContentRect.bottom
+            );
+
+            bool pushLeft = (
+                itemCurrentRect.right > actualFolderContentRect.left &&
+                    itemCurrentRect.center.dx < actualFolderContentRect.center.dx &&
+                    itemCurrentRect.bottom > actualFolderContentRect.top &&
+                    itemCurrentRect.top < actualFolderContentRect.bottom
+            );
+
+            if (pushRight) {
+              evasionX = actualFolderContentRect.right + itemMarginHorizontal;
+              print("    Item ${item.id} evading RIGHT of ${folderEntry.key} to X: $evasionX");
+            } else if (pushLeft) {
+              evasionX = actualFolderContentRect.left - item.width -
+                  itemMarginHorizontal;
+              print("    Item ${item.id} evading LEFT of ${folderEntry
+                  .key} to X: $evasionX");
+            }
+            potentialEvasionPosition = Offset(evasionX, evasionY);
+          }
+        }
+        finalItemTargetPosition = potentialEvasionPosition; // Assign the final calculated position
+        if (isEvadingThisBuild) {
+          itemAnimationDuration = const Duration(milliseconds: 350); // Specific evasion duration
+          itemAnimationCurve = Curves.easeOutCubic;
+        }
+      }
+      else {
+        itemAnimationDuration = defaultAnimationDuration;
+        // finalItemTargetPosition is already item.x, item.y, which is fine for Hero source
       }
 
       Widget currentItemWidget;
@@ -358,40 +439,16 @@ class BoardViewWidget extends ConsumerWidget {
         continue;
       }
 
-      Offset targetPosition = Offset(item.x, item.y);
-      Duration animationDuration;
-
-      if (justManipulatedIdFromNotifier == item.id) {
-        animationDuration = itemDragSnapDuration;
-      } else if (currentlyOpeningNoteId != null &&
-          item.id != currentlyOpeningNoteId &&
-          openingNoteInstance != null) {
-        targetPosition = calculateAwayPosition(
-          item,
-          openingNoteInstance,
-          context,
-        );
-        animationDuration = noteOpenAnimationDuration;
-      } else if (currentlyOpeningNoteId == null) {
-        animationDuration = noteCloseAnimationDuration;
-      } else {
-        animationDuration = defaultAnimationDuration; // Fallback
-      }
-
       itemWidgetsToRender.add(
         AnimatedPositioned(
-          // Top-level items are animated
-          key: ValueKey("anim_pos_${item.id}"),
-          duration: animationDuration,
-          curve: Curves.easeInOut,
-          left: targetPosition.dx,
-          top: targetPosition.dy,
+          key: ValueKey("anim_pos_toplevel_${item.id}"), // Use your existing key
+          duration: itemAnimationDuration,
+          curve: itemAnimationCurve, // Use determined curve
+          left: finalItemTargetPosition.dx,
+          top: finalItemTargetPosition.dy,
           width: item.width,
           height: item.height,
-          child: Listener(
-            onPointerDown: (_) => notifier.bringToFront(item.id),
-            child: currentItemWidget,
-          ),
+          child: currentItemWidget, // Listener should be inside currentItemWidget
         ),
       );
     }
@@ -550,7 +607,7 @@ class BoardViewWidget extends ConsumerWidget {
         } else if (details.data is Set<String>) {
           final Set<String> selectedIds = details.data as Set<String>;
           print(
-            "Group of items $selectedIds dropped on board. Individual Draggables should manage group move.",
+            "Group of items $selectedIds dropped on board.",
           );
         }
       },

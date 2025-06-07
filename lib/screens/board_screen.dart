@@ -240,6 +240,10 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                         currentlySelectedIdsFromNotifier.every((id) => data.contains(id)) && !containsFolder) {
                       shouldBeHovering = true;
                     }
+                    // else{
+                    //   const snackBar = SnackBar(content: Text('Cannot make folder with folders or only 1 item selected.'));
+                    //   ScaffoldMessenger.of(context).showSnackBar(snackBar);
+                    // }
                   }
                   if (shouldBeHovering != _isDraggingOverFabForFolderCreation) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -67,6 +67,16 @@ class BoardNotifier extends _$BoardNotifier {
   String? get lastToggledFolderId => _lastToggledFolderId;
   Timer? _clearLastToggledFolderIdTimer;
 
+  String? _evasionTriggerFolderId;
+  Map<String, Offset> _evadingItemsOriginalPositions = {}; // Store original x,y of items that moved
+  Map<String, Offset> _evadingItemsTargetEvasionPositions = {}; // Store target x,y for evasion
+
+  String? get evasionTriggerFolderId => _evasionTriggerFolderId;
+  Map<String, Offset> get evadingItemsTargetEvasionPositions => Map.unmodifiable(_evadingItemsTargetEvasionPositions);
+
+  String? _activelyResizingItemId;
+  String? get activelyResizingItemId => _activelyResizingItemId;
+
   @override
   Future<List<BoardItem>> build() async {
     _selectedItemIds.clear();
@@ -124,11 +134,11 @@ class BoardNotifier extends _$BoardNotifier {
   void toggleItemSelection(String itemId) {
     final currentItems = state.valueOrNull ?? [];
 
-    final item = _currentItemsValue.firstWhere((i) => i.id == itemId);
-    if (item is FolderItem) {
-      print("BoardNotifier: Folders cannot be selected for grouping.");
-      return; // Prevent selecting folders
-    }
+    // final item = _currentItemsValue.firstWhere((i) => i.id == itemId);
+    // if (item is FolderItem) {
+    //   print("BoardNotifier: Folders cannot be selected for grouping.");
+    //   return; // Prevent selecting folders
+    // }
 
     if (_selectedItemIds.contains(itemId)) {
       _selectedItemIds.remove(itemId);
@@ -419,9 +429,13 @@ class BoardNotifier extends _$BoardNotifier {
       _lastToggledFolderId = null;
     });
 
-    if (_openFolderIds.contains(folderId)) {
-      _openFolderIds.remove(folderId);
-    } else {
+    final bool wasThisFolderAlreadyOpen = _openFolderIds.contains(folderId);
+
+    // we only want one folder open at a time
+    _openFolderIds.clear();
+
+    if (!wasThisFolderAlreadyOpen) {
+      // If it wasn't open, and we cleared others, now open this one.
       _openFolderIds.add(folderId);
     }
     // Force a rebuild of listeners by re-emitting the main state
@@ -602,6 +616,17 @@ class BoardNotifier extends _$BoardNotifier {
     });
   }
 
+  void startResizingItem(String itemId) {
+    if (_activelyResizingItemId == itemId) return;
+    _activelyResizingItemId = itemId;
+    state = AsyncData(List.from(state.valueOrNull ?? []));
+  }
 
+  void stopResizingItem(String itemId) {
+    if (_activelyResizingItemId == itemId) {
+      _activelyResizingItemId = null;
+      state = AsyncData(List.from(state.valueOrNull ?? []));
+    }
+  }
 
 }
