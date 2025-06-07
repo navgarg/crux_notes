@@ -80,7 +80,7 @@ class BoardViewWidget extends ConsumerWidget {
         return Offset(
           currentItem.x,
           currentItem.y,
-        ); // Should not happen if currentlyOpeningNoteId is set
+        );
       }
 
       final screenWidth = MediaQuery.of(context).size.width;
@@ -89,11 +89,11 @@ class BoardViewWidget extends ConsumerWidget {
       double dx = currentItem.x - (openingNote.x + openingNote.width / 2);
       double dy = currentItem.y - (openingNote.y + openingNote.height / 2);
       double distance = sqrt(dx * dx + dy * dy);
-      if (distance == 0) distance = 1; // Avoid division by zero
+      if (distance == 0) distance = 1;
 
       return Offset(
         currentItem.x +
-            (dx / distance) * (screenWidth * 1.2), // Move further off-screen
+            (dx / distance) * (screenWidth * 1.2),
         currentItem.y + (dy / distance) * (screenHeight * 1.2),
       );
     }
@@ -127,7 +127,7 @@ class BoardViewWidget extends ConsumerWidget {
           AnimatedPositioned(
             key: ValueKey(
               "anim_pos_folder_icon_${folder.id}",
-            ), // More specific key
+            ),
             duration: folderIconAnimationDuration,
             curve: Curves.easeInOut,
             left: folderIconTargetPosition.dx,
@@ -135,15 +135,13 @@ class BoardViewWidget extends ConsumerWidget {
             width: folder.width,
             height: folder.height,
             child: Listener(
-              // Listener is on the FolderWidget itself
               onPointerDown: (_) => notifier.bringToFront(folder.id),
               child: FolderWidget(folder: folder),
             ),
           ),
         );
-        // --- End Folder WIDGET itself ---
 
-        // --- B. Logic for Folder CONTENTS (process for ALL folders, animate based on isThisFolderActuallyOpen) ---
+        //Logic for Folder CONTENTS (process for ALL folders, animate based on isThisFolderActuallyOpen)
         final List<BoardItem> contents = boardItems
             .where((bi) => folder.itemIds.contains(bi.id))
             .toList();
@@ -158,13 +156,14 @@ class BoardViewWidget extends ConsumerWidget {
           FolderContentLayout contentLayout = calculateFolderItemLayout(
             folder,
             contents,
+            MediaQuery.of(context).size.width
           );
 
           contentLayout.itemOffsets.forEach((contentItemId, layoutOffset) {
             final contentItem = contents.firstWhere(
               (ci) => ci.id == contentItemId,
             );
-            // IMPORTANT: Add to renderedAsFolderContentIds so they are not rendered again by the top-level loop
+            // Add to renderedAsFolderContentIds so they are not rendered again by the top-level loop
             renderedAsFolderContentIds.add(contentItem.id);
 
             print(
@@ -207,7 +206,6 @@ class BoardViewWidget extends ConsumerWidget {
             Curve finalItemAnimationCurve = Curves.easeInOut;
             double finalItemOpacity;
 
-            // Print for debugging each content item
             print(
               "Processing Content: Folder ${folder.id}, Item ${contentItem.id}, isThisFolderActuallyOpen: $isThisFolderActuallyOpen, externalNoteOpening: $currentlyOpeningNoteId",
             );
@@ -215,7 +213,7 @@ class BoardViewWidget extends ConsumerWidget {
             if (currentlyOpeningNoteId != null &&
                 contentItem.id != currentlyOpeningNoteId &&
                 openingNoteInstance != null) {
-              // External note opening: content item moves away from its *layoutOffset*
+              // External note opening: content item moves away from its layoutOffset
               // BUT, if the folder itself is also moving away, this needs to be relative or an absolute "away" spot
               final tempBoardItemForCalc = NoteItem(
                 id: contentItem.id,
@@ -298,32 +296,11 @@ class BoardViewWidget extends ConsumerWidget {
               currentFolderMaxY + padding,
             );
             print("BOUNDING BOX for POPULATED ${folder.id}: ${openFolderBoundingBoxes[folder.id]} (minX:$currentFolderMinX, minY:$currentFolderMinY, maxX:$currentFolderMaxX, maxY:$currentFolderMaxY)");
-            // if (!firstItemProcessedForBounds) { // This means at least one item contributed to bounds
-            //   openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
-            //     actualMinXForBounds - padding,
-            //     actualMinYForBounds - padding,
-            //     actualMaxXForBounds + padding,
-            //     actualMaxYForBounds + padding,
-            //   );
-            //   print("BOUNDING BOX for POPULATED ${folder.id}: ${openFolderBoundingBoxes[folder.id]} (minX:$actualMinXForBounds, minY:$actualMinYForBounds, maxX:$actualMaxXForBounds, maxY:$actualMaxYForBounds)");
-            // } else { // Folder is open, contents list was not empty, but no items were used for bounds
-            //   // (e.g., all were the currentlyOpeningNoteId, or some other filter if you add one).
-            //   // Or, simply, contents were processed but firstItemProcessedForBounds never became false (shouldn't happen if loop runs).
-            //   // Draw box around icon.
-            //   const double emptyFolderPadding = 10.0;
-            //   openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
-            //     folderIconTargetPosition.dx - emptyFolderPadding,
-            //     folderIconTargetPosition.dy - emptyFolderPadding,
-            //     folderIconTargetPosition.dx + folder.width + emptyFolderPadding,
-            //     folderIconTargetPosition.dy + folder.height + emptyFolderPadding,
-            //   );
-            //   print("BOUNDING BOX for OPEN BUT NO ITEMS CONTRIBUTED TO BOUNDS ${folder.id} (around icon): ${openFolderBoundingBoxes[folder.id]}");
-            // }
+
           } else { // Folder is NOT open
           openFolderBoundingBoxes.remove(folder.id);
           print("BOUNDING BOX for ${folder.id} REMOVED (folder not open)");
         }
-        // --- END Update openFolderBoundingBoxes ---
 
       } else { // Folder's `contents` list is empty from the start
         if (isThisFolderActuallyOpen) {
@@ -456,32 +433,6 @@ class BoardViewWidget extends ConsumerWidget {
     });
 
     final List<Widget> boundingBoxWidgets = [];
-    // openFolderBoundingBoxes.forEach((folderId, rect) {
-    //   bool folderIconIsVisible = true; // Assume visible unless proven otherwise
-    //   if (currentlyOpeningNoteId != null && openingNoteInstance != null) {
-    //     final folderItem = allSortedItems.firstWhere((it) => it.id == folderId);
-    //     Offset folderTargetPos = calculateAwayPosition(
-    //       folderItem,
-    //       openingNoteInstance,
-    //       context,
-    //     );
-    //     if ((folderTargetPos.dx - folderItem.x).abs() > 100 ||
-    //         (folderTargetPos.dy - folderItem.y).abs() > 100) {
-    //       folderIconIsVisible = false;
-    //     }
-    //   }
-    //
-    //   boundingBoxWidgets.add(
-    //     AnimatedOpacity(
-    //       key: ValueKey("anim_opacity_bbox_$folderId"),
-    //       duration: const Duration(milliseconds: 300),
-    //       opacity: folderIconIsVisible
-    //           ? 1.0
-    //           : 0.0, // Bounding box is only visible if its folder icon is visible AND it's supposed to be open
-    //       child: FolderBoundingBoxWidget(rect: rect),
-    //     ),
-    //   );
-    // });
     finalRenderList.addAll(boundingBoxWidgets);
     finalRenderList.addAll(itemWidgetsToRender);
 
