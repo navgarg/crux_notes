@@ -4,19 +4,28 @@ class FolderBoundingBoxWidget extends StatelessWidget {
   final Rect rect; // The calculated rectangle for the bounding box
 
   const FolderBoundingBoxWidget({
-    super.key,
+    Key? key,
     required this.rect,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      key: key,
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-      child: IgnorePointer( // So it doesn't block interactions with items underneath
+    print("FolderBoundingBoxWidget building with rect: $rect (width: ${rect.width}, height: ${rect.height})");
+
+    final bool isValidRect = rect.left.isFinite &&
+        rect.top.isFinite &&
+        rect.width.isFinite &&
+        rect.width >= 0 && // Width cannot be negative
+        rect.height.isFinite &&
+        rect.height >= 0; // Height cannot be negative
+
+    if (!isValidRect) {
+      print("FolderBoundingBoxWidget: INVALID RECT received: $rect");
+      return const SizedBox.shrink();
+    }
+
+
+    return IgnorePointer( // So it doesn't block interactions with items underneath
         child: Container(
           decoration: BoxDecoration(
             border: Border.all(
@@ -27,7 +36,7 @@ class FolderBoundingBoxWidget extends StatelessWidget {
             color: Colors.blueAccent.withAlpha((255*0.05).round()),
           ),
         ),
-      ),
+      // ),
     );
   }
 }

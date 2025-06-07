@@ -30,13 +30,17 @@ class BoardViewWidget extends ConsumerWidget {
     const Duration noteOpenAnimationDuration = Duration(milliseconds: 800);
     const Duration noteCloseAnimationDuration = Duration(milliseconds: 600);
     const Duration defaultAnimationDuration = Duration(milliseconds: 300);
-
+    const Duration itemDragSnapDuration = Duration(milliseconds: 0);
 
     List<Widget> itemWidgetsToRender = [];
     Map<String, Rect> openFolderBoundingBoxes = {};
     Set<String> renderedAsFolderContentIds = {};
 
     final notifier = ref.read(boardNotifierProvider.notifier);
+
+    final String? justManipulatedIdFromNotifier = ref.watch(
+      boardNotifierProvider.select((s) => notifier.justManipulatedItemId),
+    );
 
     final String? currentlyOpeningNoteId = ref.watch(
       boardNotifierProvider.select(
@@ -72,11 +76,12 @@ class BoardViewWidget extends ConsumerWidget {
       NoteItem? openingNote,
       BuildContext context,
     ) {
-      if (openingNote == null)
+      if (openingNote == null) {
         return Offset(
           currentItem.x,
           currentItem.y,
         ); // Should not happen if currentlyOpeningNoteId is set
+      }
 
       final screenWidth = MediaQuery.of(context).size.width;
       final screenHeight = MediaQuery.of(context).size.height;
@@ -93,78 +98,78 @@ class BoardViewWidget extends ConsumerWidget {
       );
     }
 
-    // Open folders and their contents
     for (final BoardItem item in allSortedItems) {
-      if (item is FolderItem && openFolderIds.contains(item.id)) {
+      // Iterate through ALL items to find folders first
+      if (item is FolderItem) {
         final folder = item;
-        Offset targetPosition = Offset(folder.x, folder.y);
-        Duration animationDuration = defaultAnimationDuration;
+        final bool isThisFolderActuallyOpen = openFolderIds.contains(folder.id);
 
-        if (currentlyOpeningNoteId != null &&
+        // This part animates the folder icon if a note opens, or if it's dragged.
+        Offset folderIconTargetPosition = Offset(folder.x, folder.y);
+        Duration folderIconAnimationDuration;
+        if (justManipulatedIdFromNotifier == folder.id) {
+          folderIconAnimationDuration = itemDragSnapDuration;
+        } else if (currentlyOpeningNoteId != null &&
             folder.id != currentlyOpeningNoteId &&
             openingNoteInstance != null) {
-          // A note is opening
-          targetPosition = calculateAwayPosition(
+          folderIconTargetPosition = calculateAwayPosition(
             folder,
             openingNoteInstance,
             context,
           );
-          animationDuration = noteOpenAnimationDuration;
+          folderIconAnimationDuration = noteOpenAnimationDuration;
+        } else if (currentlyOpeningNoteId == null) {
+          folderIconAnimationDuration = noteCloseAnimationDuration;
+        } else {
+          folderIconAnimationDuration = defaultAnimationDuration;
         }
-        else if (currentlyOpeningNoteId == null) {
-          animationDuration = noteCloseAnimationDuration;
-        }
-
         itemWidgetsToRender.add(
           AnimatedPositioned(
-            key: ValueKey("anim_pos_${folder.id}"),
-            duration: animationDuration,
+            key: ValueKey(
+              "anim_pos_folder_icon_${folder.id}",
+            ), // More specific key
+            duration: folderIconAnimationDuration,
             curve: Curves.easeInOut,
-            left: targetPosition.dx,
-            top: targetPosition.dy,
+            left: folderIconTargetPosition.dx,
+            top: folderIconTargetPosition.dy,
             width: folder.width,
             height: folder.height,
             child: Listener(
+              // Listener is on the FolderWidget itself
               onPointerDown: (_) => notifier.bringToFront(folder.id),
               child: FolderWidget(folder: folder),
             ),
           ),
         );
-        // );
+        // --- End Folder WIDGET itself ---
 
+        // --- B. Logic for Folder CONTENTS (process for ALL folders, animate based on isThisFolderActuallyOpen) ---
         final List<BoardItem> contents = boardItems
             .where((bi) => folder.itemIds.contains(bi.id))
             .toList();
+
+        // Initialize bounding box calculation variables
+        double currentFolderMinX = folderIconTargetPosition.dx;
+        double currentFolderMinY = folderIconTargetPosition.dy;
+        double currentFolderMaxX = folderIconTargetPosition.dx + folder.width;
+        double currentFolderMaxY = folderIconTargetPosition.dy + folder.height;
+
         if (contents.isNotEmpty) {
           FolderContentLayout contentLayout = calculateFolderItemLayout(
             folder,
             contents,
           );
 
-          double minX = double.infinity,
-              minY = double.infinity,
-              maxX = double.negativeInfinity,
-              maxY = double.negativeInfinity;
-          bool firstContentItem = true;
-
           contentLayout.itemOffsets.forEach((contentItemId, layoutOffset) {
             final contentItem = contents.firstWhere(
               (ci) => ci.id == contentItemId,
             );
+            // IMPORTANT: Add to renderedAsFolderContentIds so they are not rendered again by the top-level loop
             renderedAsFolderContentIds.add(contentItem.id);
 
-            if (firstContentItem) {
-              minX = layoutOffset.dx;
-              minY = layoutOffset.dy;
-              maxX = layoutOffset.dx + contentItem.width;
-              maxY = layoutOffset.dy + contentItem.height;
-              firstContentItem = false;
-            } else {
-              minX = min(minX, layoutOffset.dx);
-              minY = min(minY, layoutOffset.dy);
-              maxX = max(maxX, layoutOffset.dx + contentItem.width);
-              maxY = max(maxY, layoutOffset.dy + contentItem.height);
-            }
+            print(
+              "Content ID: ${contentItem.id}, layoutOffset: $layoutOffset, contentItem.width: ${contentItem.width}, contentItem.height: ${contentItem.height}",
+            );
 
             Widget currentContentWidget;
             if (contentItem is NoteItem) {
@@ -188,13 +193,30 @@ class BoardViewWidget extends ConsumerWidget {
               return;
             }
 
-            Offset contentTargetPosition =
-                layoutOffset;
-            Duration contentAnimationDuration = defaultAnimationDuration;
+            Offset itemInitialPositionWithinFolder = Offset(
+              folderIconTargetPosition.dx +
+                  folder.width / 2 -
+                  contentItem.width / 2,
+              folderIconTargetPosition.dy +
+                  folder.height / 2 -
+                  contentItem.height / 2,
+            );
+
+            Offset finalContentTargetPosition;
+            Duration finalContentAnimationDuration;
+            Curve finalItemAnimationCurve = Curves.easeInOut;
+            double finalItemOpacity;
+
+            // Print for debugging each content item
+            print(
+              "Processing Content: Folder ${folder.id}, Item ${contentItem.id}, isThisFolderActuallyOpen: $isThisFolderActuallyOpen, externalNoteOpening: $currentlyOpeningNoteId",
+            );
 
             if (currentlyOpeningNoteId != null &&
                 contentItem.id != currentlyOpeningNoteId &&
                 openingNoteInstance != null) {
+              // External note opening: content item moves away from its *layoutOffset*
+              // BUT, if the folder itself is also moving away, this needs to be relative or an absolute "away" spot
               final tempBoardItemForCalc = NoteItem(
                 id: contentItem.id,
                 x: layoutOffset.dx,
@@ -203,45 +225,123 @@ class BoardViewWidget extends ConsumerWidget {
                 height: contentItem.height,
                 zIndex: contentItem.zIndex,
               );
-              contentTargetPosition = calculateAwayPosition(
+              finalContentTargetPosition = calculateAwayPosition(
                 tempBoardItemForCalc,
                 openingNoteInstance,
                 context,
               );
-              contentAnimationDuration = noteOpenAnimationDuration;
+              finalContentAnimationDuration = noteOpenAnimationDuration;
+              finalItemOpacity = 1.0;
+              print(
+                "Content ${contentItem.id}: External Note, Target AWAY: $finalContentTargetPosition",
+              );
+            } else {
+              // No external note interference, animate based on this folder's state
+              if (isThisFolderActuallyOpen) {
+                finalContentTargetPosition = layoutOffset;
+                finalContentAnimationDuration = const Duration(
+                  milliseconds: 450,
+                );
+                finalItemAnimationCurve = Curves.easeOutCubic;
+                finalItemOpacity = 1.0;
+                print(
+                  "Content ${contentItem.id}: Folder OPEN, Target LAYOUT: $finalContentTargetPosition",
+                );
+              } else {
+                // Folder is closed
+                finalContentTargetPosition = itemInitialPositionWithinFolder;
+                finalContentAnimationDuration = const Duration(
+                  milliseconds: 380,
+                );
+                finalItemAnimationCurve = Curves.easeInCubic;
+                finalItemOpacity = 0.0;
+                print(
+                  "Content ${contentItem.id}: Folder CLOSED, Target INITIAL: $finalContentTargetPosition",
+                );
+              }
             }
-            else if (currentlyOpeningNoteId == null) {
-              contentAnimationDuration = noteCloseAnimationDuration;
+
+            if (isThisFolderActuallyOpen && (currentlyOpeningNoteId == null || openingNoteInstance == null)) {
+              currentFolderMinX = min(currentFolderMinX, layoutOffset.dx);
+              currentFolderMinY = min(currentFolderMinY, layoutOffset.dy);
+              currentFolderMaxX = max(currentFolderMaxX, layoutOffset.dx + contentItem.width);
+              currentFolderMaxY = max(currentFolderMaxY, layoutOffset.dy + contentItem.height);
             }
 
             itemWidgetsToRender.add(
               AnimatedPositioned(
-                key: ValueKey("anim_pos_content_${contentItem.id}"),
-                duration: contentAnimationDuration,
-                curve: Curves.easeInOut,
-                left: contentTargetPosition.dx,
-                top: contentTargetPosition.dy,
+                key: ValueKey(
+                  "content_${contentItem.id}_in_folder_${folder.id}",
+                ),
+                duration: finalContentAnimationDuration,
+                curve: finalItemAnimationCurve,
+                left: finalContentTargetPosition.dx,
+                top: finalContentTargetPosition.dy,
                 width: contentItem.width,
                 height: contentItem.height,
-                child: Listener(
-                  onPointerDown: (_) => notifier.bringToFront(contentItem.id),
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 250),
+                  opacity: finalItemOpacity,
                   child: currentContentWidget,
                 ),
               ),
             );
           });
-          const double padding = 20.0;
-          if (!firstContentItem) {
+
+            // Update openFolderBoundingBoxes for THIS folder
+            const double padding = 20.0;
+          if (isThisFolderActuallyOpen) {
             openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
-              minX - padding,
-              minY - padding,
-              maxX + padding,
-              maxY + padding,
+              currentFolderMinX - padding,
+              currentFolderMinY - padding,
+              currentFolderMaxX + padding,
+              currentFolderMaxY + padding,
             );
-          }
+            print("BOUNDING BOX for POPULATED ${folder.id}: ${openFolderBoundingBoxes[folder.id]} (minX:$currentFolderMinX, minY:$currentFolderMinY, maxX:$currentFolderMaxX, maxY:$currentFolderMaxY)");
+            // if (!firstItemProcessedForBounds) { // This means at least one item contributed to bounds
+            //   openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
+            //     actualMinXForBounds - padding,
+            //     actualMinYForBounds - padding,
+            //     actualMaxXForBounds + padding,
+            //     actualMaxYForBounds + padding,
+            //   );
+            //   print("BOUNDING BOX for POPULATED ${folder.id}: ${openFolderBoundingBoxes[folder.id]} (minX:$actualMinXForBounds, minY:$actualMinYForBounds, maxX:$actualMaxXForBounds, maxY:$actualMaxYForBounds)");
+            // } else { // Folder is open, contents list was not empty, but no items were used for bounds
+            //   // (e.g., all were the currentlyOpeningNoteId, or some other filter if you add one).
+            //   // Or, simply, contents were processed but firstItemProcessedForBounds never became false (shouldn't happen if loop runs).
+            //   // Draw box around icon.
+            //   const double emptyFolderPadding = 10.0;
+            //   openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
+            //     folderIconTargetPosition.dx - emptyFolderPadding,
+            //     folderIconTargetPosition.dy - emptyFolderPadding,
+            //     folderIconTargetPosition.dx + folder.width + emptyFolderPadding,
+            //     folderIconTargetPosition.dy + folder.height + emptyFolderPadding,
+            //   );
+            //   print("BOUNDING BOX for OPEN BUT NO ITEMS CONTRIBUTED TO BOUNDS ${folder.id} (around icon): ${openFolderBoundingBoxes[folder.id]}");
+            // }
+          } else { // Folder is NOT open
+          openFolderBoundingBoxes.remove(folder.id);
+          print("BOUNDING BOX for ${folder.id} REMOVED (folder not open)");
+        }
+        // --- END Update openFolderBoundingBoxes ---
+
+      } else { // Folder's `contents` list is empty from the start
+        if (isThisFolderActuallyOpen) {
+          const double emptyFolderPadding = 10.0;
+          openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
+            folderIconTargetPosition.dx - emptyFolderPadding,
+            folderIconTargetPosition.dy - emptyFolderPadding,
+            folderIconTargetPosition.dx + folder.width + emptyFolderPadding,
+            folderIconTargetPosition.dy + folder.height + emptyFolderPadding,
+          );
+          print("BOUNDING BOX for INITIALLY_EMPTY_AND_OPEN ${folder.id} (around icon): ${openFolderBoundingBoxes[folder.id]}");
+        } else {
+          openFolderBoundingBoxes.remove(folder.id);
+          print("BOUNDING BOX for ${folder.id} REMOVED (initially empty and not open)");
         }
       }
     }
+  }
 
     // Top-level items
     for (final BoardItem item in allSortedItems) {
@@ -282,17 +382,28 @@ class BoardViewWidget extends ConsumerWidget {
       }
 
       Offset targetPosition = Offset(item.x, item.y);
-      Duration animationDuration = defaultAnimationDuration;
+      Duration animationDuration;
 
-      if (currentlyOpeningNoteId != null && item.id != currentlyOpeningNoteId && openingNoteInstance != null) {
-        targetPosition = calculateAwayPosition(item, openingNoteInstance, context);
+      if (justManipulatedIdFromNotifier == item.id) {
+        animationDuration = itemDragSnapDuration;
+      } else if (currentlyOpeningNoteId != null &&
+          item.id != currentlyOpeningNoteId &&
+          openingNoteInstance != null) {
+        targetPosition = calculateAwayPosition(
+          item,
+          openingNoteInstance,
+          context,
+        );
         animationDuration = noteOpenAnimationDuration;
-      }else if (currentlyOpeningNoteId == null) {
+      } else if (currentlyOpeningNoteId == null) {
         animationDuration = noteCloseAnimationDuration;
+      } else {
+        animationDuration = defaultAnimationDuration; // Fallback
       }
 
       itemWidgetsToRender.add(
-        AnimatedPositioned( // Top-level items are animated
+        AnimatedPositioned(
+          // Top-level items are animated
           key: ValueKey("anim_pos_${item.id}"),
           duration: animationDuration,
           curve: Curves.easeInOut,
@@ -310,19 +421,68 @@ class BoardViewWidget extends ConsumerWidget {
 
     List<Widget> finalRenderList = [];
     openFolderBoundingBoxes.forEach((folderId, rect) {
-      bool folderIsVisible = true;
+      final bool isThisFolderCurrentlyOpen = openFolderIds.contains(folderId);
+      bool folderIconIsVisible = true;
       if (currentlyOpeningNoteId != null && openingNoteInstance != null) {
         final folderItem = allSortedItems.firstWhere((it) => it.id == folderId);
-        Offset folderTargetPos = calculateAwayPosition(folderItem, openingNoteInstance, context);
-        // Heuristic: if target is far, it's "away"
-        if ((folderTargetPos.dx - folderItem.x).abs() > 100 || (folderTargetPos.dy - folderItem.y).abs() > 100) {
-          folderIsVisible = false;
+        Offset folderTargetPos = calculateAwayPosition(
+          folderItem,
+          openingNoteInstance,
+          context,
+        );
+        if ((folderTargetPos.dx - folderItem.x).abs() > 100 ||
+            (folderTargetPos.dy - folderItem.y).abs() > 100) {
+          folderIconIsVisible = false;
         }
-            }
-      if (folderIsVisible) {
-        finalRenderList.add(FolderBoundingBoxWidget(key: ValueKey("bbox_$folderId"), rect: rect));
       }
+      finalRenderList.add(
+          Positioned(
+            key: ValueKey("positioned_bbox_$folderId"), // Key for the Positioned widget
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          child: AnimatedOpacity(
+            key: ValueKey("anim_opacity_bbox_$folderId"),
+            duration: const Duration(milliseconds: 300),
+            opacity: isThisFolderCurrentlyOpen && folderIconIsVisible ? 1.0 : 0.0,
+            child: FolderBoundingBoxWidget(
+              key: ValueKey("bbox_$folderId"),
+              rect: rect,
+            ),
+          ),
+        ),
+      );
     });
+
+    final List<Widget> boundingBoxWidgets = [];
+    // openFolderBoundingBoxes.forEach((folderId, rect) {
+    //   bool folderIconIsVisible = true; // Assume visible unless proven otherwise
+    //   if (currentlyOpeningNoteId != null && openingNoteInstance != null) {
+    //     final folderItem = allSortedItems.firstWhere((it) => it.id == folderId);
+    //     Offset folderTargetPos = calculateAwayPosition(
+    //       folderItem,
+    //       openingNoteInstance,
+    //       context,
+    //     );
+    //     if ((folderTargetPos.dx - folderItem.x).abs() > 100 ||
+    //         (folderTargetPos.dy - folderItem.y).abs() > 100) {
+    //       folderIconIsVisible = false;
+    //     }
+    //   }
+    //
+    //   boundingBoxWidgets.add(
+    //     AnimatedOpacity(
+    //       key: ValueKey("anim_opacity_bbox_$folderId"),
+    //       duration: const Duration(milliseconds: 300),
+    //       opacity: folderIconIsVisible
+    //           ? 1.0
+    //           : 0.0, // Bounding box is only visible if its folder icon is visible AND it's supposed to be open
+    //       child: FolderBoundingBoxWidget(rect: rect),
+    //     ),
+    //   );
+    // });
+    finalRenderList.addAll(boundingBoxWidgets);
     finalRenderList.addAll(itemWidgetsToRender);
 
     return DragTarget<Object>(
@@ -349,6 +509,7 @@ class BoardViewWidget extends ConsumerWidget {
               newY: localDropOffset.dy,
             );
             boardNotifier.bringToFront(droppedItem.id);
+            boardNotifier.itemWasJustManipulated(droppedItem.id);
             return;
           }
 
@@ -380,6 +541,8 @@ class BoardViewWidget extends ConsumerWidget {
             "Dropped: ${droppedItem.id}, Source: $sourceFolderId, Target Open: $targetOpenFolderId, Offset: $localDropOffset",
           );
 
+          bool wasDirectBoardDrag = false;
+
           if (sourceFolderId != null) {
             // Item was dragged from an open folder
             if (targetOpenFolderId != null) {
@@ -400,6 +563,7 @@ class BoardViewWidget extends ConsumerWidget {
               }
             } else {
               // Dragged out of sourceFolderId onto the main board
+              wasDirectBoardDrag = true;
               print(
                 "Item ${droppedItem.id} dragged out of open folder $sourceFolderId to board.",
               );
@@ -425,7 +589,11 @@ class BoardViewWidget extends ConsumerWidget {
                 newX: localDropOffset.dx,
                 newY: localDropOffset.dy,
               );
+              wasDirectBoardDrag = true;
             }
+          }
+          if (wasDirectBoardDrag) {
+            boardNotifier.itemWasJustManipulated(droppedItem.id);
           }
           boardNotifier.bringToFront(targetOpenFolderId ?? droppedItem.id);
         } else if (details.data is Set<String>) {

@@ -234,6 +234,11 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
               // this is the only selected item
               boardNotifier.toggleFolderOpenState(widget.folder.id);
             }
+            if (boardNotifier.selectedItemIds.isNotEmpty &&
+                boardNotifier.selectedItemIds.length > 1){
+              const snackBar = SnackBar(content: Text('Cannot select a folder item'));
+              ScaffoldMessenger.of(context).showSnackBar(snackBar);
+            }
           },
           child: folderContent,
         ),

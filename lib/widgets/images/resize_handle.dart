@@ -52,12 +52,12 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
     }
     final double positionOffset = -_interactiveHandleAreaSize / 2;
 
-    return Positioned(
-        left: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.bottomLeft) ? positionOffset : null,
-        top: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.topRight) ? positionOffset : null,
-        right: (widget.corner == ResizeCorner.topRight || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
-        bottom: (widget.corner == ResizeCorner.bottomLeft || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
-      child: MouseRegion(
+    // return Positioned(
+        // left: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.bottomLeft) ? positionOffset : null,
+        // top: (widget.corner == ResizeCorner.topLeft || widget.corner == ResizeCorner.topRight) ? positionOffset : null,
+        // right: (widget.corner == ResizeCorner.topRight || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
+        // bottom: (widget.corner == ResizeCorner.bottomLeft || widget.corner == ResizeCorner.bottomRight) ? positionOffset : null,
+      return MouseRegion(
         onEnter: (_) {
           // print("Enter ${widget.corner}");
           if (!_isHandleHovering) setState(() => _isHandleHovering = true);
@@ -174,7 +174,7 @@ class _ResizeHandleWidgetState extends ConsumerState<ResizeHandleWidget> {
             // ),
           ),
         ),
-      ),
+      // ),
     );
   }
 }

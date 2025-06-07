@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -55,6 +57,15 @@ class BoardNotifier extends _$BoardNotifier {
 
   String? _openingNoteId; // ID of the note currently being animated to open
   String? get openingNoteId => _openingNoteId;
+
+  String? _justManipulatedItemId; // ID of item just dragged/dropped by user
+  Timer? _justManipulatedItemClearTimer;
+
+  String? get justManipulatedItemId => _justManipulatedItemId;
+
+  String? _lastToggledFolderId;
+  String? get lastToggledFolderId => _lastToggledFolderId;
+  Timer? _clearLastToggledFolderIdTimer;
 
   @override
   Future<List<BoardItem>> build() async {
@@ -402,6 +413,12 @@ class BoardNotifier extends _$BoardNotifier {
 
   Future<void> toggleFolderOpenState(String folderId) async {
     final currentItems = _currentItemsValue;
+    _lastToggledFolderId = folderId;
+    _clearLastToggledFolderIdTimer?.cancel();
+    _clearLastToggledFolderIdTimer = Timer(const Duration(milliseconds: 500), () { // Duration of folder open/close animation
+      _lastToggledFolderId = null;
+    });
+
     if (_openFolderIds.contains(folderId)) {
       _openFolderIds.remove(folderId);
     } else {
@@ -567,4 +584,24 @@ class BoardNotifier extends _$BoardNotifier {
     final currentItems = List<BoardItem>.from(state.valueOrNull ?? []);
     state = AsyncData(currentItems);
   }
+
+  void itemWasJustManipulated(String itemId) {
+    _justManipulatedItemId = itemId;
+
+    // Notify listeners. This will cause BoardViewWidget to rebuild.
+    // It's important that this notification happens.
+    final currentItems = List<BoardItem>.from(state.valueOrNull ?? []);
+    state = AsyncData(currentItems); // Re-emit state to trigger rebuild
+
+    _justManipulatedItemClearTimer?.cancel();
+    _justManipulatedItemClearTimer = Timer(const Duration(milliseconds: 100), () { // Short delay
+      _justManipulatedItemId = null;
+      // Notify again so items revert to normal animation durations for other events.
+      final currentItemsAfterTimer = List<BoardItem>.from(state.valueOrNull ?? []);
+      state = AsyncData(currentItemsAfterTimer); // Re-emit state
+    });
+  }
+
+
+
 }
