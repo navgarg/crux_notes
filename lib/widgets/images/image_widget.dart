@@ -1,5 +1,6 @@
+import 'dart:convert';
 import 'dart:math';
-
+import 'dart:typed_data';
 import 'package:crux_notes/widgets/images/resize_handle.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +23,25 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
   bool _isHovering = false;
   bool _isCurrentlyResizing = false;
 
+  late Uint8List _decodedBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _decodedBytes = base64Decode(widget.imageItem.imageBase64);
+  }
+
+  @override
+  void didUpdateWidget(covariant ImageWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the image data somehow changes, re-decode it.
+    if (widget.imageItem.imageBase64 != oldWidget.imageItem.imageBase64) {
+      setState(() {
+        _decodedBytes = base64Decode(widget.imageItem.imageBase64);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final boardState = ref.watch(boardNotifierProvider);
@@ -30,34 +50,15 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
         : const {};
     final isSelected = selectedIds.contains(widget.imageItem.id);
 
+    // final Uint8List imageBytes = base64Decode(widget.imageItem.imageBase64);
     final imageContent = FittedBox(
       fit: BoxFit.cover,
       clipBehavior: Clip.antiAlias,
-      child: Image.network(
-        widget.imageItem.imageUrl,
-        key: ValueKey(widget.imageItem.imageUrl),
+      child: Image.memory(
+        _decodedBytes,
+        key: ValueKey(widget.imageItem.imageBase64),
         fit: BoxFit.cover,
-        loadingBuilder:
-            (
-              BuildContext context,
-              Widget child,
-              ImageChunkEvent? loadingProgress,
-            ) {
-              if (loadingProgress == null) return child;
-              return SizedBox(
-                width: widget.imageItem.width - 10,
-                height: widget.imageItem.height - 10,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.0,
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                ),
-              );
-            },
+
         errorBuilder:
             (BuildContext context, Object exception, StackTrace? stackTrace) {
               return SizedBox(

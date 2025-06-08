@@ -19,6 +19,7 @@ class FolderWidget extends ConsumerStatefulWidget {
 
 class _FolderWidgetState extends ConsumerState<FolderWidget> {
   bool _isEditingName = false;
+  bool _isHovering = false;
   late TextEditingController _nameEditingController;
   FocusNode _nameFocusNode = FocusNode();
 
@@ -374,57 +375,61 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
               print("Draggable for ${widget.folder.id}: Drag was NOT accepted. Clearing group state.");
               notifier.endGroupDrag();
             },
-            child: GestureDetector(
-              onTap: () {
-                final notifier = ref.read(boardNotifierProvider.notifier);
-                notifier.toggleItemSelection(widget.folder.id);
-                print("folder tapped. selection toggled");
-              },
-              onDoubleTap: () {
-                if (_isEditingName) return;
-                if (boardNotifier.selectedItemIds.isNotEmpty &&
-                    boardNotifier.selectedItemIds.length > 1 ||
-                    (boardNotifier.selectedItemIds.length == 1 && !isSelected)) {
-                  // boardNotifier.toggleItemSelection(folder.id);
-                } else {
-                  // this is the only selected item
-                  boardNotifier.toggleFolderOpenState(widget.folder.id);
-                }
-                if (boardNotifier.selectedItemIds.isNotEmpty){
-                  const snackBar = SnackBar(content: Text('Cannot select a folder item'));
-                  ScaffoldMessenger.of(context).showSnackBar(snackBar);
-                }
-              },
-              child: Container(
-                // Add highlight when hovered for drop
-                decoration: BoxDecoration(
-                  // Combine existing decoration with hover effect
-                  color: isHoveredForDrop
-                      ? Colors.brown.shade200
-                      : (isOpen
-                            ? Colors.brown.shade400
-                            : Colors.brown.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                  border: isSelected || isHoveredForDrop
-                      ? Border.all(
-                          color: isHoveredForDrop
-                              ? Colors.green
-                              : Theme.of(context).colorScheme.primary,
-                          width: 3,
-                        )
-                      : Border.all(color: Colors.transparent, width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(isSelected ? 70 : 50),
-                      blurRadius: isSelected ? 6 : 4,
-                      offset: const Offset(2, 2),
-                    ),
-                  ],
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _isHovering = true),
+              onExit: (_) => setState(() => _isHovering = false),
+              child: GestureDetector(
+                onTap: () {
+                  final notifier = ref.read(boardNotifierProvider.notifier);
+                  notifier.toggleItemSelection(widget.folder.id);
+                  print("folder tapped. selection toggled");
+                },
+                onDoubleTap: () {
+                  if (_isEditingName) return;
+                  if (boardNotifier.selectedItemIds.isNotEmpty &&
+                      boardNotifier.selectedItemIds.length > 1 ||
+                      (boardNotifier.selectedItemIds.length == 1 && !isSelected)) {
+                    // boardNotifier.toggleItemSelection(folder.id);
+                  } else {
+                    // this is the only selected item
+                    boardNotifier.toggleFolderOpenState(widget.folder.id);
+                  }
+                  if (boardNotifier.selectedItemIds.isNotEmpty){
+                    const snackBar = SnackBar(content: Text('Cannot select a folder item'));
+                    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+                  }
+                },
+                child: Container(
+                  // Add highlight when hovered for drop
+                  decoration: BoxDecoration(
+                    // Combine existing decoration with hover effect
+                    color: isHoveredForDrop
+                        ? Colors.brown.shade200
+                        : (isOpen
+                              ? Colors.brown.shade400
+                              : Colors.brown.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                    border: isSelected || isHoveredForDrop
+                        ? Border.all(
+                            color: isHoveredForDrop
+                                ? Colors.green
+                                : Theme.of(context).colorScheme.primary,
+                            width: 3,
+                          )
+                        : Border.all(color: Colors.transparent, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(isSelected ? 70 : 50),
+                        blurRadius: isSelected ? 6 : 4,
+                        offset: const Offset(2, 2),
+                      ),
+                    ],
+                  ),
+                  width: widget.folder.width,
+                  height: widget.folder.height,
+                  padding: const EdgeInsets.all(8.0),
+                  child: folderContent,
                 ),
-                width: widget.folder.width,
-                height: widget.folder.height,
-                padding: const EdgeInsets.all(8.0),
-                child: folderContent,
               ),
             ),
           );

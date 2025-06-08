@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'board_item.dart';
 
 class ImageItem extends BoardItem {
-  String imageUrl; // URL of the image (from Firebase Storage or web)
+  // String imageUrl; // URL of the image (from Firebase Storage or web)
+  String imageBase64;
 
   ImageItem({
     required super.id,
@@ -12,7 +13,8 @@ class ImageItem extends BoardItem {
     super.width = 200, // Default width
     super.height = 200, // Default height
     required super.zIndex,
-    required this.imageUrl,
+    // required this.imageUrl,
+    required this.imageBase64,
     super.createdAt,
     super.updatedAt,
   }) : super(type: BoardItemType.image);
@@ -26,7 +28,7 @@ class ImageItem extends BoardItem {
       'width': width,
       'height': height,
       'type': type.name,
-      'imageUrl': imageUrl,
+      'imageBase64': imageBase64,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'zIndex': zIndex,
@@ -40,7 +42,7 @@ class ImageItem extends BoardItem {
       y: (json['y'] as num).toDouble(),
       width: (json['width'] as num).toDouble(),
       height: (json['height'] as num).toDouble(),
-      imageUrl: json['imageUrl'] as String? ?? '',
+      imageBase64: json['imageBase64'] as String? ?? '',
       createdAt: json['createdAt'] as Timestamp?,
       updatedAt: json['updatedAt'] as Timestamp?,
       zIndex: json['zIndex'] as int? ?? 0,
@@ -54,7 +56,7 @@ class ImageItem extends BoardItem {
     double? width,
     double? height,
     int? zIndex,
-    String? imageUrl,
+    String? imageBase64,
     Timestamp? updatedAt,
   }) {
     return ImageItem(
@@ -65,7 +67,7 @@ class ImageItem extends BoardItem {
       height: height ?? this.height,
       zIndex: zIndex ?? this.zIndex,
       updatedAt: updatedAt ?? this.updatedAt,
-      imageUrl: imageUrl ?? this.imageUrl,
+      imageBase64: imageBase64 ?? this.imageBase64,
     );
   }
 }

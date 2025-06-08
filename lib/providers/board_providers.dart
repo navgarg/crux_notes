@@ -242,7 +242,7 @@ class BoardNotifier extends _$BoardNotifier {
         width: newWidth ?? originalItem.width,
         height: newHeight ?? originalItem.height,
         zIndex: newZIndex ?? originalItem.zIndex,
-        imageUrl: originalItem.imageUrl,
+        imageBase64: originalItem.imageBase64,
         createdAt: originalItem.createdAt,
         updatedAt: now,
       );
@@ -301,7 +301,7 @@ class BoardNotifier extends _$BoardNotifier {
         width: newWidth ?? originalItem.width,
         height: newHeight ?? originalItem.height,
         zIndex: newZIndex ?? originalItem.zIndex,
-        imageUrl: originalItem.imageUrl,
+        imageBase64: originalItem.imageBase64,
         createdAt: originalItem.createdAt,
         updatedAt: now,
       );

@@ -15,6 +15,7 @@ class NoteWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    bool _isHovering = false;
     final boardState = ref.watch(boardNotifierProvider);
     final Set<String> currentSelectedIds = boardState.hasValue
         ? ref.read(boardNotifierProvider.notifier).selectedItemIds
@@ -101,70 +102,74 @@ class NoteWidget extends ConsumerWidget {
           print("Draggable for ${note.id}: Drag was NOT accepted. Clearing group state.");
           notifier.endGroupDrag();
       },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        dragStartBehavior: DragStartBehavior.down,
-        onDoubleTap: () {
-          final notifier = ref.read(boardNotifierProvider.notifier);
-          notifier.bringToFront(note.id);
+      child: MouseRegion(
+        // onEnter: (_) => setState(() => _isHovering = true),
+        // onExit: (_) => setState(() => _isHovering = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.down,
+          onDoubleTap: () {
+            final notifier = ref.read(boardNotifierProvider.notifier);
+            notifier.bringToFront(note.id);
 
-          // Ensure this note becomes the sole selection
-          if (!(isSelected && currentSelectedIds.length == 1)) {
-            notifier.clearSelection();
+            // Ensure this note becomes the sole selection
+            if (!(isSelected && currentSelectedIds.length == 1)) {
+              notifier.clearSelection();
+              notifier.toggleItemSelection(note.id);
+            }
+
+            //  flag for animation control in BoardViewWidget
+            notifier.setOpeningNoteId(note.id);
+
+            Navigator.of(context).push(
+                PageRouteBuilder(
+                  transitionDuration: const Duration(milliseconds: 800), //slower animation
+                  pageBuilder: (context, animation, secondaryAnimation) => NoteEditorScreen(noteToEdit: note),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child); // fade for smoother feel with Hero
+                  },
+                )
+            ).then((_) {
+              // When NoteEditorScreen is popped, clear the opening note ID
+              notifier.clearOpeningNoteId();
+            });
+          },
+          onTap: () {
+            final notifier = ref.read(boardNotifierProvider.notifier);
+            notifier.bringToFront(note.id);
             notifier.toggleItemSelection(note.id);
-          }
 
-          //  flag for animation control in BoardViewWidget
-          notifier.setOpeningNoteId(note.id);
-
-          Navigator.of(context).push(
-              PageRouteBuilder(
-                transitionDuration: const Duration(milliseconds: 800), //slower animation
-                pageBuilder: (context, animation, secondaryAnimation) => NoteEditorScreen(noteToEdit: note),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child); // fade for smoother feel with Hero
-                },
-              )
-          ).then((_) {
-            // When NoteEditorScreen is popped, clear the opening note ID
-            notifier.clearOpeningNoteId();
-          });
-        },
-        onTap: () {
-          final notifier = ref.read(boardNotifierProvider.notifier);
-          notifier.bringToFront(note.id);
-          notifier.toggleItemSelection(note.id);
-
-        },
-        child: Hero(
-          tag: 'note_hero_${note.id}',
-          child: Container(
-            width: note.width,
-            height: note.height,
-            padding: const EdgeInsets.all(8.0),
-            decoration: BoxDecoration(
-              color: note.color,
-              borderRadius: BorderRadius.circular(8),
-              border: isSelected
-                  ? Border.all(color: Theme.of(context).colorScheme.primary, width: 4)
-                  : Border.all(color: Colors.transparent, width: 2.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((255 * 0.2).round()),
-                  blurRadius: isSelected ? 6 : 4,
-                  offset: const Offset(2, 2),
+          },
+          child: Hero(
+            tag: 'note_hero_${note.id}',
+            child: Container(
+              width: note.width,
+              height: note.height,
+              padding: const EdgeInsets.all(8.0),
+              decoration: BoxDecoration(
+                color: note.color,
+                borderRadius: BorderRadius.circular(8),
+                border: isSelected
+                    ? Border.all(color: Theme.of(context).colorScheme.primary, width: 4)
+                    : Border.all(color: Colors.transparent, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha((255 * 0.2).round()),
+                    blurRadius: isSelected ? 6 : 4,
+                    offset: const Offset(2, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                note.content,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 18,
+                  color: note.color.computeLuminance() > 0.5
+                      ? Colors.black
+                      : Colors.white,
                 ),
-              ],
-            ),
-            child: Text(
-              note.content,
-              maxLines: 5,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 18,
-                color: note.color.computeLuminance() > 0.5
-                    ? Colors.black
-                    : Colors.white,
               ),
             ),
           ),
