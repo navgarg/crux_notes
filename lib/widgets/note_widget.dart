@@ -62,27 +62,44 @@ class NoteWidget extends ConsumerWidget {
       ),
     );
 
-    return Draggable<Object>(
-      data: (currentSelectedIds.length > 1 && isSelected)
-          ? currentSelectedIds // If multiple items are selected and this is one of them, drag the whole group
-          : note,
+    return Draggable<BoardItem>(
+      data: note,
       feedback: feedbackWidget, // Widget shown under the finger while dragging
       childWhenDragging:
           childWhenDraggingWidget, // Widget left behind at original spot
       onDragStarted: () {
-        // if dragging an unselected item, select it and clear others.
-        final notifier = ref.read(boardNotifierProvider.notifier);
-        notifier.bringToFront(note.id);
-        if (!isSelected) {
-          notifier.clearSelection();
-          notifier.toggleItemSelection(note.id);
+        final boardNotifier = ref.read(boardNotifierProvider.notifier);
+        boardNotifier.bringToFront(note.id);
+        // Store initial positions if using relative offset method
+        Set<String> selectionStateForDrag = Set.from(boardNotifier.selectedItemIds);
+        bool thisItemIsSelected = selectionStateForDrag.contains(note.id);
+
+        if (thisItemIsSelected && selectionStateForDrag.length > 1) {
+          // Case 1: This item is already part of a multi-selection. Start group drag.
+          print("Draggable: Drag started on ${note.id} as part of existing group $selectionStateForDrag");
+          selectionStateForDrag.forEach((id) {
+            if (id != note.id) boardNotifier.bringToFront(id);
+          });
+          boardNotifier.startGroupDrag(selectionStateForDrag, note.id);
+        } else {
+          // Case 2: This item is not part of a multi-selection (or is dragged alone).
+          // Clear any other selection and select only this item.
+          // This becomes a single item drag (startGroupDrag will not be effectively called with a group).
+          if (!thisItemIsSelected || selectionStateForDrag.length > 1) {
+            print("Draggable: Drag started on ${note.id}. It becomes the sole selected item for this drag.");
+            boardNotifier.clearSelection();
+            boardNotifier.toggleItemSelection(note.id); // Ensures it's selected
+          }
+          boardNotifier.endGroupDrag(); // Ensure no prior group drag state is active
+          print("Draggable: ${note.id} is being dragged alone.");
         }
-        print('Drag started on ${note.id}');
       },
       onDragEnd: (details) {
-        print(
-          'Drag ended for ${note.id}. Dropped at offset: ${details.offset}, velocity: ${details.velocity}',
-        );
+        if (details.wasAccepted) return; // Position updated by DragTarget
+
+        final notifier = ref.read(boardNotifierProvider.notifier);
+          print("Draggable for ${note.id}: Drag was NOT accepted. Clearing group state.");
+          notifier.endGroupDrag();
       },
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

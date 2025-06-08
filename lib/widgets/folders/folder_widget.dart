@@ -82,6 +82,8 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
   Widget build(BuildContext context) {
     final boardNotifier = ref.read(boardNotifierProvider.notifier);
 
+
+
     final openFolderIds = ref.watch(
       boardNotifierProvider.select(
         (s) => s.valueOrNull != null
@@ -98,6 +100,10 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
           ),
         )
         .contains(widget.folder.id);
+    final boardState = ref.watch(boardNotifierProvider);
+    final Set<String> selectedIds = boardState.hasValue
+        ? ref.read(boardNotifierProvider.notifier).selectedItemIds
+        : const {};
 
     final bool isOpen = openFolderIds.contains(widget.folder.id);
 
@@ -217,11 +223,44 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
         feedback: feedbackWidget,
         childWhenDragging: childWhenDraggingWidget,
         onDragStarted: () {
-          boardNotifier.bringToFront(widget.folder.id);
-          if (!isSelected) {
-            boardNotifier.clearSelection();
-            boardNotifier.toggleItemSelection(widget.folder.id);
+          final boardNotifier = ref.read(boardNotifierProvider.notifier);
+          boardNotifier.bringToFront(widget.folder.id); // Bring the physically grabbed item to front
+
+          Set<String> selectedIdsAtDragStart = Set.from(boardNotifier.selectedItemIds);
+          bool wasThisItemAlreadySelected = selectedIdsAtDragStart.contains(widget.folder.id);
+
+          if (wasThisItemAlreadySelected && selectedIdsAtDragStart.length > 1) {
+            // Case 1: The grabbed item was already part of a multi-item selection.
+            // This is a group drag.
+            print("Draggable: Drag started on ${widget.folder.id} as part of existing group ${selectedIdsAtDragStart}");
+            selectedIdsAtDragStart.forEach((id) {
+              if (id != widget.folder.id) boardNotifier.bringToFront(id); // Bring other group members to front too
+            });
+            boardNotifier.startGroupDrag(selectedIdsAtDragStart, widget.folder.id);
+          } else {
+            // Case 2: The grabbed item was NOT part of a multi-item selection.
+            // It proceeds as a single item drag.
+            if (!wasThisItemAlreadySelected || selectedIdsAtDragStart.length > 1) {
+              // If it wasn't selected OR if other items were selected
+              print("Draggable: Drag started on ${widget.folder.id}. It now becomes the sole selected item for this drag operation.");
+              boardNotifier.clearSelection();
+              boardNotifier.toggleItemSelection(widget.folder.id); // Selects only this item
+            } else {
+              // It was already the only selected item. No change to selection needed.
+              print("Draggable: Drag started on ${widget.folder.id} which was already solely selected.");
+            }
+            // For a single item drag, ensure any previous group drag state is cleared.
+            boardNotifier.endGroupDrag();
+            print("Draggable: ${widget.folder.id} is being dragged alone (not as a group leader).");
           }
+        },
+
+        onDragEnd: (details) {
+          if (details.wasAccepted) return; // Position updated by DragTarget
+
+          final notifier = ref.read(boardNotifierProvider.notifier);
+          print("Draggable for ${widget.folder.id}: Drag was NOT accepted. Clearing group state.");
+          notifier.endGroupDrag();
         },
         child: GestureDetector(
           onTap: () {
@@ -297,11 +336,43 @@ class _FolderWidgetState extends ConsumerState<FolderWidget> {
             feedback: feedbackWidget,
             childWhenDragging: childWhenDraggingWidget,
             onDragStarted: () {
-              boardNotifier.bringToFront(widget.folder.id);
-              if (!isSelected) {
-                boardNotifier.clearSelection();
-                boardNotifier.toggleItemSelection(widget.folder.id);
+              final boardNotifier = ref.read(boardNotifierProvider.notifier);
+              boardNotifier.bringToFront(widget.folder.id); // Bring the physically grabbed item to front
+
+              Set<String> selectedIdsAtDragStart = Set.from(boardNotifier.selectedItemIds);
+              bool wasThisItemAlreadySelected = selectedIdsAtDragStart.contains(widget.folder.id);
+
+              if (wasThisItemAlreadySelected && selectedIdsAtDragStart.length > 1) {
+                // Case 1: The grabbed item was already part of a multi-item selection.
+                // This is a group drag.
+                print("Draggable: Drag started on ${widget.folder.id} as part of existing group ${selectedIdsAtDragStart}");
+                selectedIdsAtDragStart.forEach((id) {
+                  if (id != widget.folder.id) boardNotifier.bringToFront(id); // Bring other group members to front too
+                });
+                boardNotifier.startGroupDrag(selectedIdsAtDragStart, widget.folder.id);
+              } else {
+                // Case 2: The grabbed item was NOT part of a multi-item selection.
+                // It proceeds as a single item drag.
+                if (!wasThisItemAlreadySelected || selectedIdsAtDragStart.length > 1) {
+                  // If it wasn't selected OR if other items were selected
+                  print("Draggable: Drag started on ${widget.folder.id}. It now becomes the sole selected item for this drag operation.");
+                  boardNotifier.clearSelection();
+                  boardNotifier.toggleItemSelection(widget.folder.id); // Selects only this item
+                } else {
+                  // It was already the only selected item. No change to selection needed.
+                  print("Draggable: Drag started on ${widget.folder.id} which was already solely selected.");
+                }
+                // For a single item drag, ensure any previous group drag state is cleared.
+                boardNotifier.endGroupDrag();
+                print("Draggable: ${widget.folder.id} is being dragged alone (not as a group leader).");
               }
+            },
+            onDragEnd: (details) {
+              if (details.wasAccepted) return; // Position updated by DragTarget
+
+              final notifier = ref.read(boardNotifierProvider.notifier);
+              print("Draggable for ${widget.folder.id}: Drag was NOT accepted. Clearing group state.");
+              notifier.endGroupDrag();
             },
             child: GestureDetector(
               onTap: () {

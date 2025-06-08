@@ -81,10 +81,7 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.withAlpha(150), width: 1.0),
         ),
-        child: Opacity(
-          opacity: 0.75,
-          child: imageContent,
-        ),
+        child: Opacity(opacity: 0.75, child: imageContent),
       ),
     );
 
@@ -93,9 +90,7 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
       height: widget.imageItem.height,
       decoration: BoxDecoration(
         color: Colors.grey.withAlpha((255 * 0.1).round()),
-        borderRadius: BorderRadius.circular(
-          8,
-        ),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: Colors.grey.shade400,
           style: BorderStyle.solid,
@@ -137,8 +132,7 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
                     border: Border.all(
                       color: isSelected
                           ? Theme.of(context).colorScheme.primary
-                          : (_isHovering ||
-                                    _isCurrentlyResizing
+                          : (_isHovering || _isCurrentlyResizing
                                 ? Theme.of(
                                     context,
                                   ).colorScheme.primary.withAlpha(180)
@@ -214,10 +208,8 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
     );
 
     // Draggable for moving the whole item or the selected group
-    return Draggable<Object>(
-      data: (selectedIds.length > 1 && isSelected)
-          ? selectedIds
-          : widget.imageItem,
+    return Draggable<BoardItem>(
+      data: widget.imageItem,
       feedback: feedbackWidget,
       childWhenDragging: childWhenDraggingWidget,
       onDragStarted: () {
@@ -231,21 +223,74 @@ class _ImageWidgetState extends ConsumerState<ImageWidget> {
         print(
           "ImageWidget: Main Draggable onDragStarted for ${widget.imageItem.id} or group",
         );
-        final notifier = ref.read(boardNotifierProvider.notifier);
-        if (selectedIds.isNotEmpty && isSelected) {
+        final boardNotifier = ref.read(boardNotifierProvider.notifier);
+        boardNotifier.bringToFront(
+          widget.imageItem.id,
+        ); // Bring the physically grabbed item to front
+
+        Set<String> selectedIdsAtDragStart = Set.from(
+          boardNotifier.selectedItemIds,
+        );
+        bool wasThisItemAlreadySelected = selectedIdsAtDragStart.contains(
+          widget.imageItem.id,
+        );
+
+        if (wasThisItemAlreadySelected && selectedIdsAtDragStart.length > 1) {
+          // Case 1: The grabbed item was already part of a multi-item selection.
+          // This is a group drag.
+          print(
+            "Draggable: Drag started on ${widget.imageItem.id} as part of existing group ${selectedIdsAtDragStart}",
+          );
+          selectedIdsAtDragStart.forEach((id) {
+            if (id != widget.imageItem.id)
+              boardNotifier.bringToFront(
+                id,
+              ); // Bring other group members to front too
+          });
+          boardNotifier.startGroupDrag(
+            selectedIdsAtDragStart,
+            widget.imageItem.id,
+          );
         } else {
-          notifier.clearSelection();
-          notifier.toggleItemSelection(widget.imageItem.id);
+          // Case 2: The grabbed item was NOT part of a multi-item selection.
+          if (!wasThisItemAlreadySelected ||
+              selectedIdsAtDragStart.length > 1) {
+            // If it wasn't selected OR if other items were selected (but this one wasn't leading a group)
+            print(
+              "Draggable: Drag started on ${widget.imageItem.id}. It now becomes the sole selected item for this drag operation.",
+            );
+            boardNotifier.clearSelection();
+            boardNotifier.toggleItemSelection(
+              widget.imageItem.id,
+            ); // Selects only this item
+          } else {
+            // It was already the only selected item. No change to selection needed.
+            print(
+              "Draggable: Drag started on ${widget.imageItem.id} which was already solely selected.",
+            );
+          }
+          // For a single item drag, ensure any previous group drag state is cleared.
+          boardNotifier.endGroupDrag();
+          print(
+            "Draggable: ${widget.imageItem.id} is being dragged alone (not as a group leader).",
+          );
         }
+      },
+      onDragEnd: (details) {
+        if (details.wasAccepted) return; // Position updated by DragTarget
+
+        final notifier = ref.read(boardNotifierProvider.notifier);
+        print(
+          "Draggable for ${widget.imageItem.id}: Drag was NOT accepted. Clearing group state.",
+        );
+        notifier.endGroupDrag();
+
+        if (_isCurrentlyResizing) setState(() => _isCurrentlyResizing = false);
       },
       onDraggableCanceled: (velocity, offset) {
         if (_isCurrentlyResizing) setState(() => _isCurrentlyResizing = false);
       },
       onDragCompleted: () {
-        if (_isCurrentlyResizing) setState(() => _isCurrentlyResizing = false);
-      },
-      onDragEnd: (details) {
-        final notifier = ref.read(boardNotifierProvider.notifier);
         if (_isCurrentlyResizing) setState(() => _isCurrentlyResizing = false);
       },
       child: imageDisplayWithHandles,

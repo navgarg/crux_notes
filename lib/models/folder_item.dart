@@ -50,4 +50,29 @@ class FolderItem extends BoardItem {
       zIndex: json['zIndex'] as int? ?? 0,
     );
   }
+
+  FolderItem copyWith({
+    String? id,
+    double? x,
+    double? y,
+    double? width,
+    double? height,
+    int? zIndex,
+    String? name,
+    List<String>? itemIds,
+    Timestamp? updatedAt,
+  }) {
+    return FolderItem(
+      id: id ?? this.id,
+      x: x ?? this.x,
+      y: y ?? this.y,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      zIndex: zIndex ?? this.zIndex,
+      name: name ?? this.name,
+      itemIds: itemIds ?? this.itemIds,
+      createdAt: createdAt, // Keep original createdAt
+      updatedAt: updatedAt ?? Timestamp.now(),
+    );
+  }
 }

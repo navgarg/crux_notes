@@ -49,7 +49,7 @@ class BoardViewWidget extends ConsumerWidget {
     );
 
     final String? activelyResizingIdFromNotifier = ref.watch(
-        boardNotifierProvider.select((s) => notifier.activelyResizingItemId)
+      boardNotifierProvider.select((s) => notifier.activelyResizingItemId),
     );
 
     // Fetch the actual opening note item to get its position, if any
@@ -81,10 +81,7 @@ class BoardViewWidget extends ConsumerWidget {
       BuildContext context,
     ) {
       if (openingNote == null) {
-        return Offset(
-          currentItem.x,
-          currentItem.y,
-        );
+        return Offset(currentItem.x, currentItem.y);
       }
 
       final screenWidth = MediaQuery.of(context).size.width;
@@ -96,8 +93,7 @@ class BoardViewWidget extends ConsumerWidget {
       if (distance == 0) distance = 1;
 
       return Offset(
-        currentItem.x +
-            (dx / distance) * (screenWidth * 1.2),
+        currentItem.x + (dx / distance) * (screenWidth * 1.2),
         currentItem.y + (dy / distance) * (screenHeight * 1.2),
       );
     }
@@ -129,9 +125,7 @@ class BoardViewWidget extends ConsumerWidget {
         }
         itemWidgetsToRender.add(
           AnimatedPositioned(
-            key: ValueKey(
-              "anim_pos_folder_icon_${folder.id}",
-            ),
+            key: ValueKey("anim_pos_folder_icon_${folder.id}"),
             duration: folderIconAnimationDuration,
             curve: Curves.easeInOut,
             left: folderIconTargetPosition.dx,
@@ -160,7 +154,7 @@ class BoardViewWidget extends ConsumerWidget {
           FolderContentLayout contentLayout = calculateFolderItemLayout(
             folder,
             contents,
-            MediaQuery.of(context).size.width
+            MediaQuery.of(context).size.width,
           );
 
           contentLayout.itemOffsets.forEach((contentItemId, layoutOffset) {
@@ -169,7 +163,6 @@ class BoardViewWidget extends ConsumerWidget {
             );
             // Add to renderedAsFolderContentIds so they are not rendered again by the top-level loop
             renderedAsFolderContentIds.add(contentItem.id);
-
 
             Widget currentContentWidget;
             if (contentItem is NoteItem) {
@@ -206,7 +199,6 @@ class BoardViewWidget extends ConsumerWidget {
             Duration finalContentAnimationDuration;
             Curve finalItemAnimationCurve = Curves.easeInOut;
             double finalItemOpacity;
-
 
             if (currentlyOpeningNoteId != null &&
                 contentItem.id != currentlyOpeningNoteId &&
@@ -248,11 +240,19 @@ class BoardViewWidget extends ConsumerWidget {
               }
             }
 
-            if (isThisFolderActuallyOpen && (currentlyOpeningNoteId == null || openingNoteInstance == null)) {
+            if (isThisFolderActuallyOpen &&
+                (currentlyOpeningNoteId == null ||
+                    openingNoteInstance == null)) {
               currentFolderMinX = min(currentFolderMinX, layoutOffset.dx);
               currentFolderMinY = min(currentFolderMinY, layoutOffset.dy);
-              currentFolderMaxX = max(currentFolderMaxX, layoutOffset.dx + contentItem.width);
-              currentFolderMaxY = max(currentFolderMaxY, layoutOffset.dy + contentItem.height);
+              currentFolderMaxX = max(
+                currentFolderMaxX,
+                layoutOffset.dx + contentItem.width,
+              );
+              currentFolderMaxY = max(
+                currentFolderMaxY,
+                layoutOffset.dy + contentItem.height,
+              );
             }
 
             itemWidgetsToRender.add(
@@ -275,8 +275,8 @@ class BoardViewWidget extends ConsumerWidget {
             );
           });
 
-            // Update openFolderBoundingBoxes for THIS folder
-            const double padding = 20.0;
+          // Update openFolderBoundingBoxes for THIS folder
+          const double padding = 20.0;
           if (isThisFolderActuallyOpen) {
             openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
               currentFolderMinX - padding,
@@ -284,30 +284,32 @@ class BoardViewWidget extends ConsumerWidget {
               currentFolderMaxX + padding,
               currentFolderMaxY + padding,
             );
-
-          } else { // Folder is NOT open
-          openFolderBoundingBoxes.remove(folder.id);
-        }
-
-      } else { // Folder's `contents` list is empty from the start
-        if (isThisFolderActuallyOpen) {
-          const double emptyFolderPadding = 10.0;
-          openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
-            folderIconTargetPosition.dx - emptyFolderPadding,
-            folderIconTargetPosition.dy - emptyFolderPadding,
-            folderIconTargetPosition.dx + folder.width + emptyFolderPadding,
-            folderIconTargetPosition.dy + folder.height + emptyFolderPadding,
-          );
+          } else {
+            // Folder is NOT open
+            openFolderBoundingBoxes.remove(folder.id);
+          }
         } else {
-          openFolderBoundingBoxes.remove(folder.id);
+          // Folder's `contents` list is empty from the start
+          if (isThisFolderActuallyOpen) {
+            const double emptyFolderPadding = 10.0;
+            openFolderBoundingBoxes[folder.id] = Rect.fromLTRB(
+              folderIconTargetPosition.dx - emptyFolderPadding,
+              folderIconTargetPosition.dy - emptyFolderPadding,
+              folderIconTargetPosition.dx + folder.width + emptyFolderPadding,
+              folderIconTargetPosition.dy + folder.height + emptyFolderPadding,
+            );
+          } else {
+            openFolderBoundingBoxes.remove(folder.id);
+          }
         }
       }
     }
-  }
 
     // Top-level items
 
-    final Map<String, Rect> currentOpenFolderContentRects = Map.from(openFolderBoundingBoxes);
+    final Map<String, Rect> currentOpenFolderContentRects = Map.from(
+      openFolderBoundingBoxes,
+    );
 
     for (final BoardItem item in allSortedItems) {
       if (item is FolderItem && openFolderIds.contains(item.id)) {
@@ -328,14 +330,22 @@ class BoardViewWidget extends ConsumerWidget {
       double itemMarginHorizontal = 24.0;
       Curve itemAnimationCurve = Curves.easeInOut; // Default
 
+      final Set<String> currentSelectedIdsFromNotifier = notifier.selectedItemIds;
 
       if (item is ImageItem && activelyResizingIdFromNotifier == item.id) {
         itemAnimationDuration = Duration.zero;
-      }
-      else if (justManipulatedIdFromNotifier == item.id) {
+      } else if (justManipulatedIdFromNotifier != null &&
+          currentSelectedIdsFromNotifier.contains(justManipulatedIdFromNotifier) && // Was the primary manipulated item part of current selection?
+          currentSelectedIdsFromNotifier.length > 1 && // Is it a group selection?
+          currentSelectedIdsFromNotifier.contains(item.id)) {// Is the current item part of this group?
+        itemAnimationDuration = itemDragSnapDuration; // Snap all items in the just-dragged group
+      }else if (justManipulatedIdFromNotifier == item.id) {
         itemAnimationDuration = itemDragSnapDuration;
-        finalItemTargetPosition = Offset(item.x, item.y); // Use the raw updated x,y from model
-    } else if (currentlyOpeningNoteId != null &&
+        finalItemTargetPosition = Offset(
+          item.x,
+          item.y,
+        ); // Use the raw updated x,y from model
+      } else if (currentlyOpeningNoteId != null &&
           item.id != currentlyOpeningNoteId &&
           openingNoteInstance != null) {
         finalItemTargetPosition = calculateAwayPosition(
@@ -345,71 +355,100 @@ class BoardViewWidget extends ConsumerWidget {
         );
         itemAnimationDuration = noteOpenAnimationDuration;
       } else if (currentlyOpeningNoteId == null) {
-
         itemAnimationDuration = noteCloseAnimationDuration;
         // Check if this item needs to evade any open folder's content area.
         // Do not apply evasion if the item itself is an open folder icon that's already being positioned.
-        Rect itemRect = Rect.fromLTWH(item.x, item.y, item.width, item.height); // Its current resting place
-        Offset potentialEvasionPosition = Offset(item.x, item.y); // Start with no evasion
+        Rect itemRect = Rect.fromLTWH(
+          item.x,
+          item.y,
+          item.width,
+          item.height,
+        ); // Its current resting place
+        Offset potentialEvasionPosition = Offset(
+          item.x,
+          item.y,
+        ); // Start with no evasion
 
         print("Item ${item.id} rect: $itemRect");
 
-        for (final MapEntry<String, Rect> folderEntry in currentOpenFolderContentRects.entries) {
+        for (final MapEntry<String, Rect> folderEntry
+            in currentOpenFolderContentRects.entries) {
           // Don't evade if 'item' IS the folder icon whose content area this is
           if (item.id == folderEntry.key && item is FolderItem) {
             continue; //dont evade itself
           }
 
-          final Rect folderContentArea = folderEntry.value; // This is already padded
+          final Rect folderContentArea =
+              folderEntry.value; // This is already padded
 
-          print("  Checking overlap with folder ${folderEntry.key} content area: $folderContentArea");
-          Rect itemRectForCheck = Rect.fromLTWH(potentialEvasionPosition.dx, potentialEvasionPosition.dy, item.width, item.height).inflate(70.0);
+          print(
+            "  Checking overlap with folder ${folderEntry.key} content area: $folderContentArea",
+          );
+          Rect itemRectForCheck = Rect.fromLTWH(
+            potentialEvasionPosition.dx,
+            potentialEvasionPosition.dy,
+            item.width,
+            item.height,
+          ).inflate(70.0);
           Rect folderContentAreaForCheck = folderContentArea.inflate(70.0);
 
           if (itemRectForCheck.overlaps(folderContentAreaForCheck)) {
             print("    OVERLAP DETECTED!");
             isEvadingThisBuild = true;
-            double evasionX = potentialEvasionPosition.dx; // Start with current target
-            double evasionY = potentialEvasionPosition.dy; // Start with current target
+            double evasionX =
+                potentialEvasionPosition.dx; // Start with current target
+            double evasionY =
+                potentialEvasionPosition.dy; // Start with current target
 
-            Rect itemCurrentRect = Rect.fromLTWH(potentialEvasionPosition.dx, potentialEvasionPosition.dy, item.width, item.height);
+            Rect itemCurrentRect = Rect.fromLTWH(
+              potentialEvasionPosition.dx,
+              potentialEvasionPosition.dy,
+              item.width,
+              item.height,
+            );
             Rect actualFolderContentRect = folderEntry.value;
 
-            double itemCenterToCompare = potentialEvasionPosition.dx + item.width / 2;
+            double itemCenterToCompare =
+                potentialEvasionPosition.dx + item.width / 2;
 
-            bool pushRight = (
-                itemCurrentRect.left < actualFolderContentRect.right &&
-                    itemCurrentRect.center.dx > actualFolderContentRect.center.dx &&
-                    itemCurrentRect.bottom > actualFolderContentRect.top &&
-                    itemCurrentRect.top < actualFolderContentRect.bottom
-            );
+            bool pushRight =
+                (itemCurrentRect.left < actualFolderContentRect.right &&
+                itemCurrentRect.center.dx > actualFolderContentRect.center.dx &&
+                itemCurrentRect.bottom > actualFolderContentRect.top &&
+                itemCurrentRect.top < actualFolderContentRect.bottom);
 
-            bool pushLeft = (
-                itemCurrentRect.right > actualFolderContentRect.left &&
-                    itemCurrentRect.center.dx < actualFolderContentRect.center.dx &&
-                    itemCurrentRect.bottom > actualFolderContentRect.top &&
-                    itemCurrentRect.top < actualFolderContentRect.bottom
-            );
+            bool pushLeft =
+                (itemCurrentRect.right > actualFolderContentRect.left &&
+                itemCurrentRect.center.dx < actualFolderContentRect.center.dx &&
+                itemCurrentRect.bottom > actualFolderContentRect.top &&
+                itemCurrentRect.top < actualFolderContentRect.bottom);
 
             if (pushRight) {
               evasionX = actualFolderContentRect.right + itemMarginHorizontal;
-              print("    Item ${item.id} evading RIGHT of ${folderEntry.key} to X: $evasionX");
+              print(
+                "    Item ${item.id} evading RIGHT of ${folderEntry.key} to X: $evasionX",
+              );
             } else if (pushLeft) {
-              evasionX = actualFolderContentRect.left - item.width -
+              evasionX =
+                  actualFolderContentRect.left -
+                  item.width -
                   itemMarginHorizontal;
-              print("    Item ${item.id} evading LEFT of ${folderEntry
-                  .key} to X: $evasionX");
+              print(
+                "    Item ${item.id} evading LEFT of ${folderEntry.key} to X: $evasionX",
+              );
             }
             potentialEvasionPosition = Offset(evasionX, evasionY);
           }
         }
-        finalItemTargetPosition = potentialEvasionPosition; // Assign the final calculated position
+        finalItemTargetPosition =
+            potentialEvasionPosition; // Assign the final calculated position
         if (isEvadingThisBuild) {
-          itemAnimationDuration = const Duration(milliseconds: 350); // Specific evasion duration
+          itemAnimationDuration = const Duration(
+            milliseconds: 350,
+          ); // Specific evasion duration
           itemAnimationCurve = Curves.easeOutCubic;
         }
-      }
-      else {
+      } else {
         itemAnimationDuration = defaultAnimationDuration;
         // finalItemTargetPosition is already item.x, item.y, which is fine for Hero source
       }
@@ -441,14 +480,17 @@ class BoardViewWidget extends ConsumerWidget {
 
       itemWidgetsToRender.add(
         AnimatedPositioned(
-          key: ValueKey("anim_pos_toplevel_${item.id}"), // Use your existing key
+          key: ValueKey(
+            "anim_pos_toplevel_${item.id}",
+          ), // Use your existing key
           duration: itemAnimationDuration,
           curve: itemAnimationCurve, // Use determined curve
           left: finalItemTargetPosition.dx,
           top: finalItemTargetPosition.dy,
           width: item.width,
           height: item.height,
-          child: currentItemWidget, // Listener should be inside currentItemWidget
+          child:
+              currentItemWidget, // Listener should be inside currentItemWidget
         ),
       );
     }
@@ -470,16 +512,20 @@ class BoardViewWidget extends ConsumerWidget {
         }
       }
       finalRenderList.add(
-          Positioned(
-            key: ValueKey("positioned_bbox_$folderId"), // Key for the Positioned widget
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-            height: rect.height,
+        Positioned(
+          key: ValueKey(
+            "positioned_bbox_$folderId",
+          ), // Key for the Positioned widget
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
           child: AnimatedOpacity(
             key: ValueKey("anim_opacity_bbox_$folderId"),
             duration: const Duration(milliseconds: 300),
-            opacity: isThisFolderCurrentlyOpen && folderIconIsVisible ? 1.0 : 0.0,
+            opacity: isThisFolderCurrentlyOpen && folderIconIsVisible
+                ? 1.0
+                : 0.0,
             child: FolderBoundingBoxWidget(
               key: ValueKey("bbox_$folderId"),
               rect: rect,
@@ -493,123 +539,220 @@ class BoardViewWidget extends ConsumerWidget {
     finalRenderList.addAll(boundingBoxWidgets);
     finalRenderList.addAll(itemWidgetsToRender);
 
-    return DragTarget<Object>(
+    return DragTarget<BoardItem>(
       onWillAcceptWithDetails: (details) => true,
-      onAcceptWithDetails: (details) {
+      onAcceptWithDetails: ( details) {
         final boardNotifier = ref.read(boardNotifierProvider.notifier);
         final RenderBox renderBox = context.findRenderObject() as RenderBox;
-        final Offset localDropOffset = renderBox.globalToLocal(details.offset);
+        final Offset localDropOffset = renderBox.globalToLocal(details.offset); // Where the cursor (feedback) dropped on the BoardViewWidget
+        final screenSize = MediaQuery.of(context).size;
+        final BoardItem droppedBoardItem = details.data;
 
-        final List<BoardItem> currentBoardStateItems =
-            ref.read(boardNotifierProvider).valueOrNull ?? [];
-        final Set<String> currentlyOpenFolderIds = ref
-            .read(boardNotifierProvider.notifier)
-            .openFolderIds;
+        // Get the state from the notifier AT THE MOMENT OF DROP
 
-        if (details.data is BoardItem) {
-          final droppedItem = details.data as BoardItem;
-          if (droppedItem is FolderItem) {
-            // Prevent dragging folders into open folders or onto board in a way that changes their structure
-            print("Folder dropped, updating its position.");
-            boardNotifier.updateItemGeometricProperties(
-              droppedItem.id,
-              newX: localDropOffset.dx,
-              newY: localDropOffset.dy,
-            );
-            boardNotifier.bringToFront(droppedItem.id);
-            boardNotifier.itemWasJustManipulated(droppedItem.id);
-            return;
-          }
+        final String? activePrimaryDraggedIdFromNotifier = boardNotifier.primaryDraggedItemIdForGroup;
+        final Set<String> selectedIdsFromNotifierAtDrop = Set.from(boardNotifier.selectedItemIds);
 
-          String?
-          sourceFolderId; // Folder the item was dragged FROM (if it was in an open one)
-          for (final openFolderId in currentlyOpenFolderIds) {
-            final folder =
-                currentBoardStateItems.firstWhere(
-                      (item) => item.id == openFolderId,
-                    )
-                    as FolderItem;
-            if (folder.itemIds.contains(droppedItem.id)) {
-              sourceFolderId = openFolderId;
-              break;
-            }
-          }
+        print("onAccept: Dropped item ID: ${droppedBoardItem.id}, Type: ${droppedBoardItem.runtimeType}");
+        print("  Notifier State - primaryDraggedId: $activePrimaryDraggedIdFromNotifier, selection: $selectedIdsFromNotifierAtDrop");
+        final Offset? activePrimaryDragStartOffsetFromNotifier = boardNotifier.primaryDragStartOffsetOnBoard;
+        final Map<String, Offset> activeInitialGroupOffsetsFromNotifier = Map.from(boardNotifier.initialGroupDragItemOffsets); // Make a copy
 
-          String? targetOpenFolderId; // Open folder the item is dropped INTO
-          for (final entry in openFolderBoundingBoxes.entries) {
-            // Ensure the folder itself is not the dropped item, prevent dropping item into its own visual representation's bbox
-            if (entry.key != droppedItem.id &&
-                entry.value.contains(localDropOffset)) {
-              targetOpenFolderId = entry.key;
-              break;
-            }
-          }
 
-          print(
-            "Dropped: ${droppedItem.id}, Source: $sourceFolderId, Target Open: $targetOpenFolderId, Offset: $localDropOffset",
-          );
+        print("  Notifier State - activePrimaryDraggedId: $activePrimaryDraggedIdFromNotifier");
+        print("  Notifier State - selectedIdsAtDrop: $selectedIdsFromNotifierAtDrop");
+        print("  Notifier State - activePrimaryDragStartOffset: $activePrimaryDragStartOffsetFromNotifier");
+        print("  Notifier State - activeInitialGroupOffsets: $activeInitialGroupOffsetsFromNotifier");
+        print("  Drop Offset on Board: $localDropOffset");
 
-          bool wasDirectBoardDrag = false;
 
-          if (sourceFolderId != null) {
-            // Item was dragged from an open folder
-            if (targetOpenFolderId != null) {
-              // And dropped into an open folder's bounding box
-              if (sourceFolderId == targetOpenFolderId) {
-                print(
-                  "Item ${droppedItem.id} moved within same folder ${sourceFolderId}. No change in membership.",
-                );
+        // Scenario 1: An active group drag is concluding, and the dropped item is its primary item
+        if (activePrimaryDraggedIdFromNotifier != null &&
+            droppedBoardItem.id == activePrimaryDraggedIdFromNotifier &&
+            selectedIdsFromNotifierAtDrop.contains(activePrimaryDraggedIdFromNotifier) &&
+            selectedIdsFromNotifierAtDrop.length > 1) {
+
+          print("GROUP DRAG PATH: Primary item $activePrimaryDraggedIdFromNotifier dropped by user.");
+          final Set<String> groupIdsToMove = selectedIdsFromNotifierAtDrop;
+
+          print("GROUP DRAG PATH: Primary item $activePrimaryDraggedIdFromNotifier dropped by user.");
+
+          final Offset primaryItemNewProposedTopLeft = localDropOffset; // Assume drop offset is new top-left of primary
+
+          // Calculate proposed new positions for all items in the group before clamping
+          Map<String, Offset> proposedNewPositionsForGroup = {};
+          for (String itemId in groupIdsToMove) {
+            final itemModel = (ref.read(boardNotifierProvider).valueOrNull ?? [])
+                .firstWhere((i) => i.id == itemId);
+
+            if (itemId == activePrimaryDraggedIdFromNotifier) {
+              proposedNewPositionsForGroup[itemId] = primaryItemNewProposedTopLeft;
+            } else {
+              final relativeOffset = activeInitialGroupOffsetsFromNotifier[itemId];
+              if (relativeOffset != null) {
+                proposedNewPositionsForGroup[itemId] = Offset(
+                    primaryItemNewProposedTopLeft.dx + relativeOffset.dx,
+                    primaryItemNewProposedTopLeft.dy + relativeOffset.dy);
               } else {
-                // Moved from sourceFolderId to targetOpenFolderId
-                print(
-                  "Item ${droppedItem.id} moved from open folder $sourceFolderId to open folder $targetOpenFolderId",
-                );
-                boardNotifier.addItemToFolder(
-                  targetOpenFolderId,
-                  droppedItem.id,
-                );
+                // Fallback if relative offset somehow wasn't stored
+                print("Warning: Missing relative offset for $itemId in group drag. Using simple delta.");
+                final double deltaX = primaryItemNewProposedTopLeft.dx - activePrimaryDragStartOffsetFromNotifier!.dx;
+                final double deltaY = primaryItemNewProposedTopLeft.dy - activePrimaryDragStartOffsetFromNotifier.dy;
+                proposedNewPositionsForGroup[itemId] = Offset(itemModel.x + deltaX, itemModel.y + deltaY);
               }
-            } else {
-              // Dragged out of sourceFolderId onto the main board
-              wasDirectBoardDrag = true;
-              print(
-                "Item ${droppedItem.id} dragged out of open folder $sourceFolderId to board.",
-              );
-              boardNotifier.removeItemFromFolder(
-                sourceFolderId,
-                droppedItem.id,
-                newX: localDropOffset.dx,
-                newY: localDropOffset.dy,
-              );
             }
+          }
+
+          // Calculate bounding box of the entire group based on their proposed new positions
+          double groupMinX = double.infinity, groupMinY = double.infinity;
+          double groupMaxX = double.negativeInfinity, groupMaxY = double.negativeInfinity;
+          bool canCalculateGroupBounds = true;
+
+          proposedNewPositionsForGroup.forEach((itemId, pos) {
+            final itemModel = (ref.read(boardNotifierProvider).valueOrNull ?? [])
+                .firstWhere((i) => i.id == itemId);
+            groupMinX = min(groupMinX, pos.dx);
+            groupMinY = min(groupMinY, pos.dy);
+            groupMaxX = max(groupMaxX, pos.dx + itemModel.width);
+            groupMaxY = max(groupMaxY, pos.dy + itemModel.height);
+          });
+
+          Map<String, Offset> finalNewPositionsForGroup = {};
+          if (canCalculateGroupBounds) {
+            // Calculate adjustment needed to keep group within screen bounds
+            double adjustX = 0, adjustY = 0;
+            if (groupMinX < 0) adjustX = -groupMinX;
+            else if (groupMaxX > screenSize.width) adjustX = screenSize.width - groupMaxX;
+
+            if (groupMinY < 0) adjustY = -groupMinY;
+            else if (groupMaxY > screenSize.height) adjustY = screenSize.height - groupMaxY;
+
+            // Apply adjustment and set final positions
+            proposedNewPositionsForGroup.forEach((itemId, pos) {
+              finalNewPositionsForGroup[itemId] = Offset(pos.dx + adjustX, pos.dy + adjustY);
+              boardNotifier.itemWasJustManipulated(itemId); // For snap animation
+            });
+          }
+          if (finalNewPositionsForGroup.isNotEmpty) {
+            boardNotifier.updateItemGroupPositions(finalNewPositionsForGroup);
           } else {
-            if (targetOpenFolderId != null) {
-              // Dragged from board into an open folder's bounding box
-              print(
-                "Item ${droppedItem.id} dragged from board into open folder $targetOpenFolderId.",
-              );
-              boardNotifier.addItemToFolder(targetOpenFolderId, droppedItem.id);
-            } else {
-              // Item dragged on the board itself (not from/to an open folder)
-              print("Item ${droppedItem.id} dragged on the board.");
-              boardNotifier.updateItemGeometricProperties(
-                droppedItem.id,
-                newX: localDropOffset.dx,
-                newY: localDropOffset.dy,
-              );
-              wasDirectBoardDrag = true;
-            }
+            boardNotifier.endGroupDrag(); // Ensure state is cleared if nothing to update
           }
-          if (wasDirectBoardDrag) {
-            boardNotifier.itemWasJustManipulated(droppedItem.id);
-          }
-          boardNotifier.bringToFront(targetOpenFolderId ?? droppedItem.id);
-        } else if (details.data is Set<String>) {
-          final Set<String> selectedIds = details.data as Set<String>;
-          print(
-            "Group of items $selectedIds dropped on board.",
-          );
+
         }
+        // Scenario 2: Single Item Drag (or conditions for group drag were not met)
+        else {
+          final droppedItem = details.data;
+          print("SINGLE ITEM DRAG PATH: Item ${droppedItem.id} (${droppedItem
+              .runtimeType}) dropped by user.");
+
+          Offset newProposedTopLeft = localDropOffset;
+
+          // Clamp single item position to screen bounds
+          if (newProposedTopLeft.dx < 0)
+            newProposedTopLeft = Offset(0, newProposedTopLeft.dy);
+          if (newProposedTopLeft.dx + droppedItem.width > screenSize.width)
+            newProposedTopLeft = Offset(
+                screenSize.width - droppedItem.width, newProposedTopLeft.dy);
+          if (newProposedTopLeft.dy < 0)
+            newProposedTopLeft = Offset(newProposedTopLeft.dx, 0);
+          if (newProposedTopLeft.dy + droppedItem.height > screenSize.height)
+            newProposedTopLeft = Offset(
+                newProposedTopLeft.dx, screenSize.height - droppedItem.height);
+
+          // Holder for whether the item was just moved on the board vs. a folder interaction
+          bool wasMovedOnBoardWithoutFolderMembershipChange = false;
+
+          // Check for interactions with open folders (add/remove from folder)
+          if (droppedItem is! FolderItem) {
+            final List<BoardItem> currentBoardStateItems = ref
+                .read(boardNotifierProvider)
+                .valueOrNull ?? [];
+            final Set<String> currentOpenFolderIdsForInteraction = notifier
+                .openFolderIds; // Direct read
+
+            String? sourceFolderId; // Folder the item was dragged FROM (if it was in an open one)
+            for (final openFolderId in currentOpenFolderIdsForInteraction) {
+              final folder = currentBoardStateItems.firstWhere((item) =>
+              item.id == openFolderId && item is FolderItem) as FolderItem?;
+              if (folder != null && folder.itemIds.contains(droppedItem.id)) {
+                sourceFolderId = openFolderId;
+                break;
+              }
+            }
+
+            String? targetOpenFolderId; // Open folder the item is dropped INTO
+            final currentOpenBoxes = openFolderBoundingBoxes; // From the build method's scope
+            for (final entry in currentOpenBoxes.entries) {
+              if (entry.key != droppedItem.id &&
+                  entry.value.contains(localDropOffset)) {
+                targetOpenFolderId = entry.key;
+                break;
+              }
+            }
+
+            if (sourceFolderId !=
+                null) { // Item was dragged from an open folder
+              if (targetOpenFolderId !=
+                  null) { // And dropped into an open folder's bounding box
+                if (sourceFolderId !=
+                    targetOpenFolderId) { // Moved between different folders
+                  print("Item ${droppedItem
+                      .id} moved from folder $sourceFolderId to $targetOpenFolderId");
+                  boardNotifier.addItemToFolder(
+                      targetOpenFolderId, droppedItem.id);
+                } else { // Dropped back into the same folder's content area
+                  print("Item ${droppedItem
+                      .id} moved within same folder $sourceFolderId. No change in membership. Updating position to $newProposedTopLeft");
+                  boardNotifier.updateItemGeometricProperties(
+                      droppedItem.id, newX: newProposedTopLeft.dx,
+                      newY: newProposedTopLeft.dy);
+                  wasMovedOnBoardWithoutFolderMembershipChange = true;
+                }
+              } else { // Dragged out of sourceFolderId onto the main board
+                print("Item ${droppedItem
+                    .id} dragged out of folder $sourceFolderId to board at $newProposedTopLeft");
+                boardNotifier.removeItemFromFolder(
+                    sourceFolderId, droppedItem.id, newX: newProposedTopLeft.dx,
+                    newY: newProposedTopLeft.dy);
+                wasMovedOnBoardWithoutFolderMembershipChange = true;
+              }
+            } else { // Item was dragged from the main board (not from an open folder)
+              if (targetOpenFolderId !=
+                  null) { // And dropped into an open folder's content area
+                print("Item ${droppedItem
+                    .id} dragged from board into folder $targetOpenFolderId");
+                boardNotifier.addItemToFolder(
+                    targetOpenFolderId, droppedItem.id);
+              } else { // Item dragged and dropped on the board itself
+                print("Item ${droppedItem
+                    .id} (Note/Image) dragged on board to $newProposedTopLeft");
+                boardNotifier.updateItemGeometricProperties(
+                    droppedItem.id, newX: newProposedTopLeft.dx,
+                    newY: newProposedTopLeft.dy);
+                wasMovedOnBoardWithoutFolderMembershipChange = true;
+              }
+            }
+            boardNotifier.bringToFront(targetOpenFolderId ??
+                droppedItem.id); // Bring relevant item/folder to front
+          } else { // The droppedItem IS a FolderItem (single folder drag)
+            print("Single Folder ${droppedItem
+                .id} dragged on board to $newProposedTopLeft");
+            boardNotifier.updateItemGeometricProperties(
+                droppedItem.id, newX: newProposedTopLeft.dx,
+                newY: newProposedTopLeft.dy);
+            wasMovedOnBoardWithoutFolderMembershipChange = true;
+            boardNotifier.bringToFront(droppedItem.id);
+          }
+
+          if (wasMovedOnBoardWithoutFolderMembershipChange) {
+            boardNotifier.itemWasJustManipulated(
+                droppedItem.id); // For snap animation
+          }
+          boardNotifier
+              .endGroupDrag(); // Ensure any potential prior group drag state is cleared
+        }
+        boardNotifier.endGroupDrag(); // Clear group drag state after handling the drop
       },
       builder: (context, candidateData, rejectedData) {
         return Stack(children: finalRenderList);

@@ -77,6 +77,14 @@ class BoardNotifier extends _$BoardNotifier {
   String? _activelyResizingItemId;
   String? get activelyResizingItemId => _activelyResizingItemId;
 
+  Map<String, Offset> _initialGroupDragItemOffsets = {}; // Key: itemId, Value: its offset from primary item
+  String? _primaryDraggedItemIdForGroup;
+  Offset? _primaryDragStartOffsetOnBoard;
+
+  String? get primaryDraggedItemIdForGroup => _primaryDraggedItemIdForGroup;
+  Offset? get primaryDragStartOffsetOnBoard => _primaryDragStartOffsetOnBoard;
+  Map<String, Offset> get initialGroupDragItemOffsets => Map.unmodifiable(_initialGroupDragItemOffsets);
+
   @override
   Future<List<BoardItem>> build() async {
     _selectedItemIds.clear();
@@ -587,6 +595,7 @@ class BoardNotifier extends _$BoardNotifier {
     clearSelection();
   }
 
+
   void setOpeningNoteId(String noteId) {
     _openingNoteId = noteId;
     final currentItems = List<BoardItem>.from(state.valueOrNull ?? []);
@@ -598,6 +607,7 @@ class BoardNotifier extends _$BoardNotifier {
     final currentItems = List<BoardItem>.from(state.valueOrNull ?? []);
     state = AsyncData(currentItems);
   }
+
 
   void itemWasJustManipulated(String itemId) {
     _justManipulatedItemId = itemId;
@@ -616,6 +626,7 @@ class BoardNotifier extends _$BoardNotifier {
     });
   }
 
+
   void startResizingItem(String itemId) {
     if (_activelyResizingItemId == itemId) return;
     _activelyResizingItemId = itemId;
@@ -629,4 +640,79 @@ class BoardNotifier extends _$BoardNotifier {
     }
   }
 
+
+  void startGroupDrag(Set<String> groupIds, String primaryItemId) {
+    if (groupIds.length <= 1) return;
+
+    _primaryDraggedItemIdForGroup = primaryItemId;
+    _initialGroupDragItemOffsets.clear();
+
+    final primaryItem = (state.valueOrNull ?? []).firstWhere((i) => i.id == primaryItemId);
+    _primaryDragStartOffsetOnBoard = Offset(primaryItem.x, primaryItem.y);
+
+    for (String itemId in groupIds) {
+      if (itemId == primaryItemId) continue;
+      final item = (state.valueOrNull ?? []).firstWhere((i) => i.id == itemId);
+      _initialGroupDragItemOffsets[itemId] = Offset(item.x - primaryItem.x, item.y - primaryItem.y);
+        }
+    print("Group drag started. Primary: $primaryItemId. Relative offsets: $_initialGroupDragItemOffsets");
+  }
+
+  void endGroupDrag() {
+    _primaryDraggedItemIdForGroup = null;
+    _primaryDragStartOffsetOnBoard = null;
+    _initialGroupDragItemOffsets.clear();
+    print("Group drag ended.");
+  }
+
+  Future<void> updateItemGroupPositions(Map<String, Offset> newPositions) async {
+    final itemsCollection = ref.read(userBoardItemsCollectionProvider);
+    if (itemsCollection == null || newPositions.isEmpty) return;
+
+    var currentItems = List<BoardItem>.from(state.valueOrNull ?? []);
+    bool changed = false;
+    final now = Timestamp.now();
+
+    // Create a list of updated items for optimistic update
+    List<BoardItem> updatedItemsList = List.from(currentItems);
+
+    for (int i = 0; i < updatedItemsList.length; i++) {
+      BoardItem currentItem = updatedItemsList[i];
+      if (newPositions.containsKey(currentItem.id)) {
+        Offset newPos = newPositions[currentItem.id]!;
+        if (currentItem.x != newPos.dx || currentItem.y != newPos.dy) {
+          changed = true;
+          // Create a new instance of the item with updated positions
+          if (currentItem is NoteItem) {
+            updatedItemsList[i] = currentItem.copyWith(x: newPos.dx, y: newPos.dy, updatedAt: now);
+          } else if (currentItem is ImageItem) {
+            updatedItemsList[i] = currentItem.copyWith(x: newPos.dx, y: newPos.dy, updatedAt: now);
+          } else if (currentItem is FolderItem) {
+            updatedItemsList[i] = currentItem.copyWith(x: newPos.dx, y: newPos.dy, updatedAt: now);
+          }
+        }
+      }
+    }
+
+    if (!changed) return;
+
+    state = AsyncData(updatedItemsList); // Optimistic update
+
+    // Firestore update (batch)
+    WriteBatch batch = FirebaseFirestore.instance.batch();
+    newPositions.forEach((itemId, offset) {
+      final itemInList = updatedItemsList.firstWhere((i) => i.id == itemId); // Get the fully updated item
+      batch.update(itemsCollection.doc(itemId), itemInList.toJson()); // Update with all fields
+    });
+
+    try {
+      await batch.commit();
+      print("BoardNotifier: Updated positions for item group.");
+    } catch (e, s) {
+      print("BoardNotifier: Error updating item group positions: $e\n$s");
+      ref.invalidateSelf(); // Or revert to original positions from before optimistic update
+    // } finally {
+    //   endGroupDrag(); // Clear group drag state after persistence attempt
+    }
+  }
 }
