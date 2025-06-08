@@ -203,58 +203,79 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
           ? SizedBox(
               width: 150 + 100,
               height: 56 + 80,
-              child: DragTarget<Object>(
+              child: DragTarget<BoardItem>(
+                // onWillAcceptWithDetails: (details) {
+                //   final data = details.data;
+                //   bool accept = false;
+                //   if (data is Set<String> && data.length > 1) {
+                //     final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
+                //     if (currentlySelectedIdsFromNotifier.length == data.length &&
+                //         currentlySelectedIdsFromNotifier.every((id) => data.contains(id))) {
+                //       accept = true;
+                //     }
+                //   }
+                //   if (accept != _isDraggingOverFabForFolderCreation) {
+                //     WidgetsBinding.instance.addPostFrameCallback((_) {
+                //       if (mounted) {
+                //         setState(() => _isDraggingOverFabForFolderCreation = accept);
+                //       }
+                //     });
+                //   }
+                //   return accept;
+                // },
                 onWillAcceptWithDetails: (details) {
-                  final data = details.data;
-                  bool accept = false;
-                  if (data is Set<String> && data.length > 1) {
-                    final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
-                    if (currentlySelectedIdsFromNotifier.length == data.length &&
-                        currentlySelectedIdsFromNotifier.every((id) => data.contains(id))) {
-                      accept = true;
-                    }
-                  }
-                  if (accept != _isDraggingOverFabForFolderCreation) {
+                  final boardNotifier = ref.read(boardNotifierProvider.notifier);
+
+                  // The FAB should activate IF AND ONLY IF:
+                  // 1. A group drag is active (the provider has a primary dragged item).
+                  // 2. There is more than one item selected.
+                  // 3. The item being dragged IS the primary item of that group.
+                  final bool isGroupDragActive = boardNotifier.primaryDraggedItemIdForGroup != null &&
+                      boardNotifier.selectedItemIds.length > 1 &&
+                      boardNotifier.primaryDraggedItemIdForGroup == details.data.id;
+
+                  // Update the UI state if needed
+                  if (isGroupDragActive != _isDraggingOverFabForFolderCreation) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) {
-                        setState(() => _isDraggingOverFabForFolderCreation = accept);
+                        setState(() => _isDraggingOverFabForFolderCreation = isGroupDragActive);
                       }
                     });
                   }
-                  return accept;
+                  return isGroupDragActive;
                 },
 
-                onMove: (details) {
-                  final data = details.data;
-                  bool shouldBeHovering = false;
-                  if (data is Set<String> && data.length>1) {
-                    final currentBoardItemsValue =
-                        ref.read(boardNotifierProvider).valueOrNull ?? [];
-                    bool containsFolder = data.any(
-                      (id) => currentBoardItemsValue.any(
-                        (bi) => bi.id == id && bi is FolderItem,
-                      ),
-                    );
-                    final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
-                    if (currentlySelectedIdsFromNotifier.length == data.length &&
-                        currentlySelectedIdsFromNotifier.every((id) => data.contains(id)) && !containsFolder) {
-                      shouldBeHovering = true;
-                    }
-                    // else{
-                    //   const snackBar = SnackBar(content: Text('Cannot make folder with folders or only 1 item selected.'));
-                    //   ScaffoldMessenger.of(context).showSnackBar(snackBar);
-                    // }
-                  }
-                  if (shouldBeHovering != _isDraggingOverFabForFolderCreation) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted)
-                        setState(
-                          () => _isDraggingOverFabForFolderCreation =
-                              shouldBeHovering,
-                        );
-                    });
-                  }
-                },
+                // onMove: (details) {
+                //   final data = details.data;
+                //   bool shouldBeHovering = false;
+                //   if (data is Set<String> && data.length>1) {
+                //     final currentBoardItemsValue =
+                //         ref.read(boardNotifierProvider).valueOrNull ?? [];
+                //     bool containsFolder = data.any(
+                //       (id) => currentBoardItemsValue.any(
+                //         (bi) => bi.id == id && bi is FolderItem,
+                //       ),
+                //     );
+                //     final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
+                //     if (currentlySelectedIdsFromNotifier.length == data.length &&
+                //         currentlySelectedIdsFromNotifier.every((id) => data.contains(id)) && !containsFolder) {
+                //       shouldBeHovering = true;
+                //     }
+                //     // else{
+                //     //   const snackBar = SnackBar(content: Text('Cannot make folder with folders or only 1 item selected.'));
+                //     //   ScaffoldMessenger.of(context).showSnackBar(snackBar);
+                //     // }
+                //   }
+                //   if (shouldBeHovering != _isDraggingOverFabForFolderCreation) {
+                //     WidgetsBinding.instance.addPostFrameCallback((_) {
+                //       if (mounted)
+                //         setState(
+                //           () => _isDraggingOverFabForFolderCreation =
+                //               shouldBeHovering,
+                //         );
+                //     });
+                //   }
+                // },
                 onLeave: (data) {
                   if (_isDraggingOverFabForFolderCreation) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -265,21 +286,28 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                     });
                   }
                 },
-                onAcceptWithDetails: (details) async {
-                  final data = details.data;
-                  if (data is Set<String> && data.length > 1) {
-                    final currentlySelectedIdsFromNotifier = ref.read(boardNotifierProvider.notifier).selectedItemIds;
-                    if (currentlySelectedIdsFromNotifier.length == data.length &&
-                        currentlySelectedIdsFromNotifier.every((id) => data.contains(id))) {
-                      ref.read(boardNotifierProvider.notifier).createFolderFromSelection("New Group");
-                    }
+                onAcceptWithDetails: (details) {
+                  final boardNotifier = ref.read(boardNotifierProvider.notifier);
+
+                  // Re-check the condition on accept for safety
+                  final bool isGroupDragActive = boardNotifier.primaryDraggedItemIdForGroup != null &&
+                      boardNotifier.selectedItemIds.length > 1 &&
+                      boardNotifier.primaryDraggedItemIdForGroup == details.data.id;
+
+                  if (isGroupDragActive) {
+                    // The createFolderFromSelection function already knows which
+                    // items are selected from the provider's internal state.
+                    boardNotifier.createFolderFromSelection("New Group");
                   }
+
+                  // Reset the UI state
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) {
                       setState(() => _isDraggingOverFabForFolderCreation = false);
                     }
                   });
                 },
+
                 builder:
                     (
                       BuildContext context,
