@@ -10,7 +10,7 @@ A modern, desktop-focused note-taking application designed with a unique pinboar
     *   [Data Management](#data-management)
 3.  [Tech Stack](#tech-stack)
 4.  [Usage](#usage)
-5.  [Known Issues & Future Work](#known-issues--future-work)
+5.  [Future Work](#future-work)
 6.  [Remarks](#remarks)
 
 ## Overview
@@ -30,15 +30,26 @@ The primary goal is to create an engaging and fun user experience while providin
     *   A central 'birds-eye' view where all items are displayed.
     *   Items (notes, images, folders) can be dragged and dropped anywhere on the board.
     *   Support for selecting multiple items to move them together as a group.
+      <img src=https://github.com/navgarg/Loose-Files/blob/master/notes_ss/individual_drag.gif height=450 width=700>
+
+
+      <img src=https://github.com/navgarg/Loose-Files/blob/master/notes_ss/group_drag.gif height=450 width=700>
+      
 *   **Item Types:**
     *   **Notes:**
         *   Create text-based notes with customizable background colors.
         *   Double-tap a note to open a full-screen editor.
         *   Simple text editing capabilities with a save function.
+          
+     <img src=https://github.com/navgarg/Loose-Files/blob/master/notes_ss/note_opening_closing.gif height=450 width=700>
+     
     *   **Images:**
         *   Add images to the board from local storage (via image picker).
         *   Images can be moved and resized directly on the board using drag handles.
         *   Clicking on an image (when not resizing) currently performs no action.
+          
+     <img src=https://github.com/navgarg/Loose-Files/blob/master/notes_ss/add_new_img.gif height=450 width=700>
+     
     *   **Folders:**
         *   Organize notes and images within folders (folders cannot contain other folders).
         *   Create folders via a "New" button or by dragging selected items to the "New" button area.
@@ -48,6 +59,13 @@ The primary goal is to create an engaging and fun user experience while providin
         *   Open folders display a bounding box around their contents and the folder icon itself.
         *   Drag items into/out of open folders or onto closed folders to manage their contents.
         *   Only one folder can be open at a time; opening another folder closes the currently open one.
+          
+      <img src=https://github.com/navgarg/Loose-Files/blob/master/notes_ss/create_new_folder.gif height=450 width=700>
+
+
+
+      <img src=https://github.com/navgarg/Loose-Files/blob/master/notes_ss/add_remove_from_folder.gif height=450 width=700>
+      
 *   **"New" Button:**
     *   A persistent button to create new Notes, Images, or Folders.
     *   Acts as a drop target: drag multiple selected notes/images onto it to create a new folder containing them.
@@ -65,6 +83,9 @@ The primary goal is to create an engaging and fun user experience while providin
     *   Supports **Light and Dark themes**.
     *   A toggle button in the AppBar allows users to switch between themes.
     *   Theme preference is persisted across app sessions.
+      
+   <img src=https://github.com/navgarg/Loose-Files/blob/master/notes_ss/light_dark_theme.gif height=450 width=700>
+   
 *   **Visual Feedback:**
     *   Clear visual cues for selected items.
     *   Hover effects and drag feedback for items.
@@ -110,17 +131,14 @@ The primary goal is to create an engaging and fun user experience while providin
 5.  Use the **theme toggle icon** in the AppBar to switch between light and dark modes.
 6.  Use the **logout icon** in the AppBar to sign out.
 
-## Known Issues & Future Work
+## Future Work
 
-*   **Known Issues:**
-    *   Group drag functionality is under review.
-*   **Future Work / Enhancements:**
-    *   More sophisticated item evasion logic (e.g., radial push, considering multiple overlaps).
-    *   Cloud save for images (currently URLs are saved, but actual image binary upload could be a feature).
-    *   More advanced text editor features for notes.
-    *   Search/filter functionality for board items.
-    *   Customizable grid snapping or alignment guides.
-    *   Performance optimizations for very large boards.
+* More sophisticated item evasion logic (e.g., radial push, considering multiple overlaps).
+* Cloud save for images (currently URLs are saved, but actual image binary upload could be a feature).
+* More advanced text editor features for notes.
+* Search/filter functionality for board items.
+* Customizable grid snapping or alignment guides.
+* Performance optimizations for very large boards.
 
 
 ## Remarks
